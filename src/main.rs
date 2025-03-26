@@ -1,6 +1,6 @@
 use std::str;
+extern crate clap;
 use clap::Parser;
-
 
 #[derive(Parser, Debug)]
 #[command(version, about = "A simple utility to show and test pretty colors")]
