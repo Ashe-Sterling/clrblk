@@ -5,7 +5,7 @@ use clap::Parser;
 
 
 #[derive(Parser, Debug)]
-#[command(version, about = "A simple utility to show and test pretty colors")]
+#[command(version, about = "A simple utility to show and test pretty colors.")]
 
 struct Args {
     /// Width of blocks
@@ -16,7 +16,7 @@ struct Args {
     #[arg(short, long)]
     inline: bool,
 
-    /// Supports ANSI decimal codes, 1-16 in words, and hexcodes with or without #
+    /// Supports ANSI decimal color codes, a range of ANSI decimal color codes, 1-16 in words, and hexcodes with or without #
     #[arg(required = true, num_args = 1..=2)]
     values: Vec<String>,
 }
@@ -107,11 +107,14 @@ fn named_color_to_ansi(input: &str) -> Option<u8> {
 
 fn single(values: &[String], width: u8) {
     let color_input: &str = &values[0];
+    
     if let Some(ansi_code) = named_color_to_ansi(color_input) {
         print_block_ansi(ansi_code, width);
     } else if let Ok(ansi_code) = color_input.parse::<u8>() {
         print_block_ansi(ansi_code, width);
-    } else {
+    } else if let Ok(ansi_code) = color_input.parse::<u16>(){
+        eprintln!("Error, input color format ({}) not recognized (see -h or --help for more information)",ansi_code);
+    } else if color_input.len() == 6 {
         let hexcode = color_input.strip_prefix('#').unwrap_or(color_input);
         let hex_pairs: Vec<&str> = hexcode
             .as_bytes()
@@ -119,6 +122,8 @@ fn single(values: &[String], width: u8) {
             .map(|chunk| str::from_utf8(chunk).unwrap())
             .collect();
         print_block_hex(hex_pairs, width);
+    } else {
+        eprintln!("Error, input color format ({}) not recognized (see -h or --help for more information)",color_input);
     }
 }
 
@@ -128,10 +133,13 @@ fn many(values: &[String], width: u8, inline: bool) {
         if let Ok(color_input2) = values[1].parse::<u8>() {
             print_blocks_ansi(color_input1, color_input2, width, inline);
         } else {
-            println!("Error, input range end is not a valid ANSI color code (0-255, {} provided)", values[1]);
+            eprintln!("Error, input range end is not a valid ANSI color code (0-255 needed, {} provided)", values[1]);
         }
-    } else {
-        println!("Error, input range start is not a valid ANSI color code (0-255, {} provided)", values[0]);
+    } else if let Ok(_color_input2) = values[1].parse::<u8>() {
+        eprintln!("Error, input range start is not a valid ANSI color code (0-255 needed, {} provided)", values[0]);
+    }
+    else {
+        eprintln!("Error, input ranges provided are not valid ANSI color codes (0-255 needed, {} and {} provided)",values[0],values[1])
     }
 }
 
@@ -145,6 +153,7 @@ fn main() {
         single(&args.values, args.width);
     }
     else {
+        eprint!("Error, more than 2 positional arguments provided; could not parse color or color range.");
     }
 }
  
