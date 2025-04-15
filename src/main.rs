@@ -153,7 +153,7 @@ fn main() {
         single(&args.values, args.width);
     }
     else {
-        eprint!("Error, more than 2 positional arguments provided; could not parse color or color range.");
+        eprintln!("Error, more than 2 positional arguments provided; could not parse color or color range.");
     }
 }
  
