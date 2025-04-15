@@ -35,7 +35,7 @@ fn print_block_ansi(color: u8, width: u8) {
 
 fn print_block_hex(hex_pairs: Vec<&str>, width: u8) {
     if hex_pairs.len() != 3 {
-        eprintln!("Hex input should be 6 characters split into 3 parts, e.g. ['ff', 'bb', 'ee']");
+        eprintln!("Hex input should be 6 characters split into 3 parts, e.g. ['ff', 'bb', 'ee' = ffbbee or #ffbbee]");
         return;
     }
 
