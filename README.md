@@ -25,7 +25,7 @@ cargo build --release --locked
 ```
 then copy to somewhere in your $PATH
 ```sh
-cp /path/to/path/in/$PATH
+cp target/release/clrblk /path/to/path/in/$PATH
 ```
 
 ## Usage
