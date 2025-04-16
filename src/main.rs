@@ -137,10 +137,7 @@ fn single(values: &[String], width: u8) {
             .collect();
         print_block_hex(hex_pairs, width);
     } else {
-        eprintln!(
-            "⚠️  Input color format or name ({}) not recognized (see -h or --help for more information).",
-            color_input
-        );
+        eprintln!("⚠️  Input color format or name ({}) not recognized (see -h or --help for more information).", color_input);
     }
 }
 
