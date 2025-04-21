@@ -35,9 +35,16 @@ fn print_block_ansi(color: u8, width: u8) {
 fn print_blocks_ansi(color1: u8, color2: u8, width: u8, inline: bool) {
     if inline {
         let mut buffer = String::new();
-        for color in color1..=color2 {
-            buffer.push_str(&format!("\x1b[48;5;{}m", color));
-            buffer.push_str(&" ".repeat(width.into()));
+        if color1 >= color2 {
+            for color in (color2..=color1).rev() {
+                buffer.push_str(&format!("\x1b[48;5;{}m", color));
+                buffer.push_str(&" ".repeat(width.into()));    
+            }
+        } else {
+            for color in color1..=color2 {
+                buffer.push_str(&format!("\x1b[48;5;{}m", color));
+                buffer.push_str(&" ".repeat(width.into()));
+            }
         }
         buffer.push_str("\x1b[0m\n");
 
@@ -47,12 +54,19 @@ fn print_blocks_ansi(color1: u8, color2: u8, width: u8, inline: bool) {
         let _ = handle.flush();
     } else {
         let mut buffer = String::new();
-        for color in color1..=color2 {
-            buffer.push_str(&format!("\x1b[48;5;{}m", color));
-            buffer.push_str(&" ".repeat(width.into()));
-            buffer.push_str("\x1b[0m\n");
+        if color1 >= color2 {
+            for color in (color2..=color1).rev() {
+                buffer.push_str(&format!("\x1b[48;5;{}m", color));
+                buffer.push_str(&" ".repeat(width.into()));
+                buffer.push_str("\x1b[0m\n");
+            }
+        } else {
+            for color in color1..=color2 {
+                buffer.push_str(&format!("\x1b[48;5;{}m", color));
+                buffer.push_str(&" ".repeat(width.into()));
+                buffer.push_str("\x1b[0m\n");
+            }
         }
-
         let stdout = io::stdout();
         let mut handle = stdout.lock();
         let _ = handle.write_all(buffer.as_bytes());
@@ -151,7 +165,7 @@ fn many(values: &[String], width: u8, inline: bool) {
     } else if let Ok(_color_input2) = values[1].parse::<u8>() {
         eprintln!("⚠️  Input range start is not a valid ANSI color code (0-255 needed, {} provided).", values[0]);
     } else {
-        eprintln!("⚠️  Input ranges provided are not valid ANSI color codes (0-255 needed, {} and {} provided.)",values[0],values[1])
+        eprintln!("⚠️  Input ranges provided are not valid ANSI color codes (0-255 needed, {} and {} provided.)", values[0], values[1])
     }
 }
 
