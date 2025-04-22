@@ -33,8 +33,8 @@ fn print_block_ansi(color: u8, width: u8) {
 }
 
 fn print_blocks_ansi(color1: u8, color2: u8, width: u8, inline: bool) {
+    let mut buffer = String::new();
     if inline {
-        let mut buffer = String::new();
         if color1 >= color2 {
             for color in (color2..=color1).rev() {
                 buffer.push_str(&format!("\x1b[48;5;{}m", color));
@@ -47,13 +47,7 @@ fn print_blocks_ansi(color1: u8, color2: u8, width: u8, inline: bool) {
             }
         }
         buffer.push_str("\x1b[0m\n");
-
-        let stdout = io::stdout();
-        let mut handle = stdout.lock();
-        let _ = handle.write_all(buffer.as_bytes());
-        let _ = handle.flush();
     } else {
-        let mut buffer = String::new();
         if color1 >= color2 {
             for color in (color2..=color1).rev() {
                 buffer.push_str(&format!("\x1b[48;5;{}m", color));
@@ -67,11 +61,11 @@ fn print_blocks_ansi(color1: u8, color2: u8, width: u8, inline: bool) {
                 buffer.push_str("\x1b[0m\n");
             }
         }
-        let stdout = io::stdout();
-        let mut handle = stdout.lock();
-        let _ = handle.write_all(buffer.as_bytes());
-        let _ = handle.flush();
     }
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+    let _ = handle.write_all(buffer.as_bytes());
+    let _ = handle.flush();
 }
 
 fn print_block_hex(hex_pairs: Vec<&str>, width: u8) {
