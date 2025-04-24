@@ -106,19 +106,21 @@ fn print_blocks_ansi(color1: u8, color2: u8, width: u8, inline: bool, numbered: 
 }
 
 fn print_hex_gradient(hex_pairs1: Vec<&str>, hex_pairs2: Vec<&str>) {
+    // range starts
     let r1 = u8::from_str_radix(hex_pairs1[0], 16).unwrap_or(0);
     let g1 = u8::from_str_radix(hex_pairs1[1], 16).unwrap_or(0);
     let b1 = u8::from_str_radix(hex_pairs1[2], 16).unwrap_or(0);
+    // range ends
     let r2 = u8::from_str_radix(hex_pairs2[0], 16).unwrap_or(0);
     let g2 = u8::from_str_radix(hex_pairs2[1], 16).unwrap_or(0);
     let b2 = u8::from_str_radix(hex_pairs2[2], 16).unwrap_or(0);
-    
+    // print buffers for each color
     let mut r: Vec<u8> = Vec::new();
     let mut g: Vec<u8> = Vec::new();
     let mut b: Vec<u8> = Vec::new();
-    
+    // final print buffer
     let mut buffer = String::new();
-    
+    // determine whether range is ascending or descending and fill each color buffer
     if r1 <= r2 {
         for i in 0..=(r2 - r1) {
             r.push((r1 + i) as u8);
@@ -151,7 +153,8 @@ fn print_hex_gradient(hex_pairs1: Vec<&str>, hex_pairs2: Vec<&str>) {
     let g_len = g.len().try_into().unwrap_or(0);
     let b_len = b.len().try_into().unwrap_or(0);
     dbg!("r_len: {}\ng_len: {}\nb_len: {}\n", r_len, g_len, b_len);
-    
+    // determine the longest color buffer and pad the end of the shorter buffer(s) with the last color in each buffer until they are all the same size, then fill the final print buffer with those 
+    // [something about this doesn't work, and the final buffer never gets filled, this is already supposed to be the shitty hack only there to get it to work]
     if r_len >= g_len && r_len >= b_len {
         let g_padding = r_len - g_len;
         let b_padding = r_len - b_len;
