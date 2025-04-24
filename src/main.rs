@@ -156,9 +156,71 @@ fn named_color_to_ansi(input: &str) -> Option<u8> {
     }
 }
 
+fn print_grayscale() {
+    let mut buffer = String::new();
+
+    for v in 0..=255 {
+        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", v, v, v));
+        buffer.push_str(" ");
+    }
+    buffer.push_str("\n");
+    for v in (0..=255).rev() {
+        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", v, v, v));
+        buffer.push_str(" ");
+    }
+    buffer.push_str("\x1b[0m\n");
+
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+    let _ = handle.write_all(buffer.as_bytes());
+    let _ = handle.flush();
+}
+
+fn print_rainbow() {
+    let mut buffer = String::new();
+    let mut r: u8 = 255;
+    let mut g: u8 = 0;
+    let mut b: u8 = 0;
+    for i in 0..=255 {
+        g = i;
+        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", r, g, b));
+        buffer.push_str(" ");
+    }
+    for i in (0..=255).rev(){
+        r = i;
+        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", r, g, b));
+        buffer.push_str(" ");
+    }
+    for i in 0..=255{
+        b = i;
+        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", r, g, b));
+        buffer.push_str(" ");
+    }
+    for i in (0..=255).rev(){
+        g = i;
+        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", r, g, b));
+        buffer.push_str(" ");
+    }
+    for i in 0..=255 {
+        r = i;
+        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", r, g, b));
+        buffer.push_str(" ");
+    }
+    for i in (0..=255).rev(){
+        b = i;
+        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", r, g, b));
+        buffer.push_str(" ");
+    }
+    buffer.push_str("\x1b[0m\n");
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+    let _ = handle.write_all(buffer.as_bytes());
+    let _ = handle.flush();
+}
+
 fn single(values: &[String], width: u8, numbered: bool) {
     let color_input: &str = &values[0];
-
+    // it works but this logic is a mess and I hate it
     if let Some(ansi_code) = named_color_to_ansi(color_input) {
         print_block_ansi(ansi_code, width, numbered);
     } else if let Ok(ansi_code) = color_input.parse::<u8>() {
@@ -198,61 +260,6 @@ fn many(values: &[String], width: u8, inline: bool, numbered: bool) {
     } else {
         eprintln!("⚠️  Input ranges provided are not valid ANSI color codes (0-255 needed, {} and {} provided.)", values[0], values[1])
     }
-}
-
-fn print_grayscale() {
-    let mut buffer = String::new();
-    for v in 0..=255 {
-        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", v, v, v));
-        buffer.push_str(" ");
-    }
-    buffer.push_str("\n");
-    for v in (0..=255).rev() {
-        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", v, v, v));
-        buffer.push_str(" ");
-    }
-    buffer.push_str("\x1b[0m\n");
-    let stdout = io::stdout();
-    let mut handle = stdout.lock();
-    let _ = handle.write_all(buffer.as_bytes());
-    let _ = handle.flush();
-}
-
-fn print_rainbow() {
-    let mut buffer = String::new();
-    let mut r: u8 = 255;
-    let mut g: u8 = 0;
-    let mut b: u8 = 0;
-    for i in 0..=255 {
-        g = i;
-        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", r, g, b));
-        buffer.push_str(" ");
-    }
-    for i in (0..=255).rev(){
-        r = i;
-        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", r, g, b));
-        buffer.push_str(" ");
-    }
-    for i in 0..=255{
-        b = i;
-        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", r, g, b));
-        buffer.push_str(" ");
-    }
-    for i in (0..=255).rev(){
-        g = i;
-        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", r, g, b));
-        buffer.push_str(" ");
-    }
-    for i in 0..=255 {
-        r = i;
-        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", r, g, b));
-        buffer.push_str(" ");
-    }
-    buffer.push_str("\x1b[0m\n");
-    let stdout = io::stdout();
-    let mut handle = stdout.lock();
-    let _ = handle.write_all(buffer.as_bytes());
-    let _ = handle.flush();
 }
 
 fn main() {
