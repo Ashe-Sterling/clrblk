@@ -277,6 +277,6 @@ fn main() {
     } else if args.values.len() >= 3 {
         eprintln!("⚠️  More than 2 positional arguments provided; could not parse color or color range. [!THIS SHOULD NEVER APPEAR IF args HAS PARSED CORRECTLY!]");
     } else {
-        eprintln!("⚠️  !!!ARGUMENTS DID NOT PARSE CORRECTLY!!! (If you see this please consider creating an issue on the gitlab repo [https://gitlab.com/ashe.sterling/clrblk]) ")
+        eprintln!("⚠️  !!!ARGUMENTS DID NOT PARSE CORRECTLY!!! (If you see this please consider creating an issue on the gitlab repo [https://gitlab.com/ashe.sterling/clrblk])")
     }
 }
