@@ -10,8 +10,8 @@ clrblk is a command-line utility for printing color blocks in the terminal. It s
   - Named ANSI colors
   - Ranges of ANSI colors
 - Customize block width
-- Inline range printing for compact output
-- Lightweight and fast, written in Rust
+- Inline range printing
+- ANSI color number labeling
 
 ## Installation
 
