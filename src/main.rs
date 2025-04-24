@@ -15,14 +15,29 @@ struct Args {
     #[arg(short, long)]
     inline: bool,
 
-    /// Supports ANSI decimal color codes, a range of ANSI decimal color codes, 1-16 in words, and hexcodes with or without #
-    #[arg(required = true, num_args = 1..=2)]
+    /// Print color number(s) before printing the color block(s)
+    #[arg(short, long)]
+    numbered: bool,
+
+    /// Supports ANSI color codes, a range of ANSI color codes, ANSI_colors_in_words, and hexcodes with or without #
+    #[arg(num_args = 1..=2)]
     values: Vec<String>,
+
+    /// Prints a pretty rainbow!
+    #[arg(short, long)]
+    rainbow: bool,
+
+    // Prints a grayscale gradient
+    #[arg(short, long)]
+    grayscale: bool,
 }
 
-fn print_block_ansi(color: u8, width: u8) {
+fn print_block_ansi(color: u8, width: u8, numbered: bool) {
     let mut buffer = String::new();
     let space_block = " ".repeat(width.into());
+    if numbered {
+        buffer.push_str(&color.to_string());
+    }
     buffer.push_str(&format!("\x1b[48;5;{}m", color));
     buffer.push_str(&space_block);
     buffer.push_str("\x1b[0m\n");
@@ -33,17 +48,27 @@ fn print_block_ansi(color: u8, width: u8) {
     let _ = handle.flush();
 }
 
-fn print_blocks_ansi(color1: u8, color2: u8, width: u8, inline: bool) {
+fn print_blocks_ansi(color1: u8, color2: u8, width: u8, inline: bool, numbered: bool) {
     let mut buffer = String::new();
     let space_block = " ".repeat(width.into());
     if inline {
         if color1 >= color2 {
             for color in (color2..=color1).rev() {
+                if numbered {
+                    buffer.push_str("\x1b[0m ");
+                    buffer.push_str(&color.to_string());
+                    buffer.push_str(":");
+                }
                 buffer.push_str(&format!("\x1b[48;5;{}m", color));
                 buffer.push_str(&space_block);    
             }
         } else {
             for color in color1..=color2 {
+                if numbered {
+                    buffer.push_str("\x1b[0m ");
+                    buffer.push_str(&color.to_string());
+                    buffer.push_str(":");
+                }
                 buffer.push_str(&format!("\x1b[48;5;{}m", color));
                 buffer.push_str(&space_block);    
             }
@@ -52,12 +77,22 @@ fn print_blocks_ansi(color1: u8, color2: u8, width: u8, inline: bool) {
     } else {
         if color1 >= color2 {
             for color in (color2..=color1).rev() {
+                if numbered {
+                    buffer.push_str("\x1b[0m ");
+                    buffer.push_str(&color.to_string());
+                    buffer.push_str(":");
+                }
                 buffer.push_str(&format!("\x1b[48;5;{}m", color));
                 buffer.push_str(&space_block);    
                 buffer.push_str("\x1b[0m\n");
             }
         } else {
             for color in color1..=color2 {
+                if numbered {
+                    buffer.push_str("\x1b[0m ");
+                    buffer.push_str(&color.to_string());
+                    buffer.push_str(":");
+                }
                 buffer.push_str(&format!("\x1b[48;5;{}m", color));
                 buffer.push_str(&space_block);    
                 buffer.push_str("\x1b[0m\n");
@@ -121,13 +156,13 @@ fn named_color_to_ansi(input: &str) -> Option<u8> {
     }
 }
 
-fn single(values: &[String], width: u8) {
+fn single(values: &[String], width: u8, numbered: bool) {
     let color_input: &str = &values[0];
 
     if let Some(ansi_code) = named_color_to_ansi(color_input) {
-        print_block_ansi(ansi_code, width);
+        print_block_ansi(ansi_code, width, numbered);
     } else if let Ok(ansi_code) = color_input.parse::<u8>() {
-        print_block_ansi(ansi_code, width);
+        print_block_ansi(ansi_code, width, numbered);
     } else if let Ok(ansi_code) = color_input.parse::<u16>() {
         eprintln!("⚠️  Input color or format ({}) not recognized (see -h or --help for more information.)", ansi_code);
     } else if color_input.len() == 6 {
@@ -151,10 +186,10 @@ fn single(values: &[String], width: u8) {
     }
 }
 
-fn many(values: &[String], width: u8, inline: bool) {
+fn many(values: &[String], width: u8, inline: bool, numbered: bool) {
     if let Ok(color_input1) = values[0].parse::<u8>() {
         if let Ok(color_input2) = values[1].parse::<u8>() {
-            print_blocks_ansi(color_input1, color_input2, width, inline);
+            print_blocks_ansi(color_input1, color_input2, width, inline, numbered);
         } else {
             eprintln!("⚠️  Input range end is not a valid ANSI color code (0-255 needed, {} provided).", values[1]);
         }
@@ -165,12 +200,71 @@ fn many(values: &[String], width: u8, inline: bool) {
     }
 }
 
+fn print_grayscale() {
+    let mut buffer = String::new();
+    for v in 0..=255 {
+        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", v, v, v));
+        buffer.push_str(" ");
+    }
+    buffer.push_str("\n");
+    for v in (0..=255).rev() {
+        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", v, v, v));
+        buffer.push_str(" ");
+    }
+    buffer.push_str("\x1b[0m\n");
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+    let _ = handle.write_all(buffer.as_bytes());
+    let _ = handle.flush();
+}
+
+fn print_rainbow() {
+    let mut buffer = String::new();
+    let mut r: u8 = 255;
+    let mut g: u8 = 0;
+    let mut b: u8 = 0;
+    for i in 0..=255 {
+        g = i;
+        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", r, g, b));
+        buffer.push_str(" ");
+    }
+    for i in (0..=255).rev(){
+        r = i;
+        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", r, g, b));
+        buffer.push_str(" ");
+    }
+    for i in 0..=255{
+        b = i;
+        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", r, g, b));
+        buffer.push_str(" ");
+    }
+    for i in (0..=255).rev(){
+        g = i;
+        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", r, g, b));
+        buffer.push_str(" ");
+    }
+    for i in 0..=255 {
+        r = i;
+        buffer.push_str(&format!("\x1b[48;2;{};{};{}m", r, g, b));
+        buffer.push_str(" ");
+    }
+    buffer.push_str("\x1b[0m\n");
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+    let _ = handle.write_all(buffer.as_bytes());
+    let _ = handle.flush();
+}
+
 fn main() {
     let args = Args::parse();
-    if args.values.len() == 2 {
-        many(&args.values, args.width, args.inline);
+    if args.rainbow {
+        print_rainbow();
+    } else if args.grayscale {
+        print_grayscale();
+    } else if args.values.len() == 2 { 
+        many(&args.values, args.width, args.inline, args.numbered);
     } else if args.values.len() == 1 {
-        single(&args.values, args.width);
+        single(&args.values, args.width, args.numbered);
     } else {
         eprintln!("⚠️  More than 2 positional arguments provided; could not parse color or color range. [!THIS SHOULD NEVER APPEAR IF args HAS PARSED CORRECTLY!]");
     }
