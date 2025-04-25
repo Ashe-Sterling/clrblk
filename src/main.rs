@@ -58,6 +58,11 @@ fn print_blocks_ansi(color1: u8, color2: u8, width: u8, inline: bool, numbered: 
                     buffer.push_str("\x1b[0m ");
                     buffer.push_str(&color.to_string());
                     buffer.push_str(":");
+                    if color <= 9 {
+                        buffer.push_str("  ");
+                    } else if color <= 99 {
+                        buffer.push_str(" ");
+                    }
                 }
                 buffer.push_str(&format!("\x1b[48;5;{}m", color));
                 buffer.push_str(&space_block);    
@@ -68,6 +73,11 @@ fn print_blocks_ansi(color1: u8, color2: u8, width: u8, inline: bool, numbered: 
                     buffer.push_str("\x1b[0m ");
                     buffer.push_str(&color.to_string());
                     buffer.push_str(":");
+                    if color <= 9 {
+                        buffer.push_str("  ");
+                    } else if color <= 99 {
+                        buffer.push_str(" ");
+                    }
                 }
                 buffer.push_str(&format!("\x1b[48;5;{}m", color));
                 buffer.push_str(&space_block);    
@@ -81,6 +91,11 @@ fn print_blocks_ansi(color1: u8, color2: u8, width: u8, inline: bool, numbered: 
                     buffer.push_str("\x1b[0m ");
                     buffer.push_str(&color.to_string());
                     buffer.push_str(":");
+                    if color <= 9 {
+                        buffer.push_str("  ");
+                    } else if color <= 99 {
+                        buffer.push_str(" ");
+                    }
                 }
                 buffer.push_str(&format!("\x1b[48;5;{}m", color));
                 buffer.push_str(&space_block);    
@@ -92,6 +107,11 @@ fn print_blocks_ansi(color1: u8, color2: u8, width: u8, inline: bool, numbered: 
                     buffer.push_str("\x1b[0m ");
                     buffer.push_str(&color.to_string());
                     buffer.push_str(":");
+                    if color <= 9 {
+                        buffer.push_str("  ");
+                    } else if color <= 99 {
+                        buffer.push_str(" ");
+                    }
                 }
                 buffer.push_str(&format!("\x1b[48;5;{}m", color));
                 buffer.push_str(&space_block);    
