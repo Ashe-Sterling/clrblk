@@ -1,5 +1,5 @@
 use std::io::{self, Write};
-use std::str;
+use std::{str};
 extern crate clap;
 use clap::Parser;
 
@@ -125,6 +125,68 @@ fn print_blocks_ansi(color1: u8, color2: u8, width: u8, inline: bool, numbered: 
     let _ = handle.flush();
 }
 
+fn print_hex_gradient(hex_pairs1: Vec<&str>, hex_pairs2: Vec<&str>) {
+    let r1 = u8::from_str_radix(hex_pairs1[0], 16).unwrap_or(0);
+    let g1 = u8::from_str_radix(hex_pairs1[1], 16).unwrap_or(0);
+    let b1 = u8::from_str_radix(hex_pairs1[2], 16).unwrap_or(0);
+
+    let r2 = u8::from_str_radix(hex_pairs2[0], 16).unwrap_or(0);
+    let g2 = u8::from_str_radix(hex_pairs2[1], 16).unwrap_or(0);
+    let b2 = u8::from_str_radix(hex_pairs2[2], 16).unwrap_or(0);
+
+    let mut r: Vec<u8> = Vec::new();
+    let mut g: Vec<u8> = Vec::new();
+    let mut b: Vec<u8> = Vec::new();
+
+    let mut buffer = String::new();
+
+    if r1 <= r2 {
+        for i in 0..=(r2 - r1) {
+            r.push((r1 + i) as u8);
+        }
+    } else {
+        for i in 0..=(r1 - r2) {
+            r.push((r1 - i) as u8);
+        }
+    }
+    if g1 <= g2 {
+        for i in 0..=(g2 - g1) {
+            g.push((g1 + i) as u8);
+        }
+    } else {
+        for i in 0..=(g1 - g2){
+            g.push((g1 - i) as u8);
+        }
+    }
+    if b1 <= b2 {
+        for i in 0..=(b2 - b1) {
+            b.push((b1 + i) as u8);
+        }
+    } else {
+        for i in 0..=(b1 - b2) {
+            b.push((b1 - i) as u8);
+        }
+    }
+
+    let max_len = r.len().max(g.len()).max(b.len());
+    r.resize(max_len, *r.last().unwrap());
+    g.resize(max_len, *g.last().unwrap());
+    b.resize(max_len, *b.last().unwrap());
+
+    for i in 0..max_len {
+        buffer.push_str(&format!(
+            "\x1b[48;2;{};{};{}m ",
+            r[i], g[i], b[i]
+        ));
+    }    
+    buffer.push_str("\x1b[0m\n");
+
+    let stdout = std::io::stdout();
+    let mut handle = stdout.lock();
+    let _ = handle.write_all(buffer.as_bytes());
+    let _ = handle.flush();
+}
+
 fn print_block_hex(hex_pairs: Vec<&str>, width: u8) {
     if hex_pairs.len() != 3 {
         eprintln!("⚠️  Hex input should be 6 characters split into 3 parts, e.g. ['ff', 'bb', 'ee' = ffbbee or #ffbbee]");
@@ -238,6 +300,17 @@ fn print_rainbow() {
     let _ = handle.flush();
 }
 
+fn is_valid_hex_color(s: &str) -> bool {
+    let hex = s.strip_prefix('#').unwrap_or(s);
+    if hex.len() != 6 {
+        return false;
+    }
+    if hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        return true;
+    }
+    false
+}
+
 fn single(values: &[String], width: u8, numbered: bool) {
     let color_input: &str = &values[0];
     // it works but this logic is a mess and I hate it
@@ -247,7 +320,7 @@ fn single(values: &[String], width: u8, numbered: bool) {
         print_block_ansi(ansi_code, width, numbered);
     } else if let Ok(ansi_code) = color_input.parse::<u16>() {
         eprintln!("⚠️  Input color or format ({}) not recognized (see -h or --help for more information.)", ansi_code);
-    } else if color_input.len() == 6 {
+    } else if is_valid_hex_color(&color_input) {
         let hexcode = color_input;
         let hex_pairs: Vec<&str> = hexcode
             .as_bytes()
@@ -274,6 +347,25 @@ fn many(values: &[String], width: u8, inline: bool, numbered: bool) {
             print_blocks_ansi(color_input1, color_input2, width, inline, numbered);
         } else {
             eprintln!("⚠️  Input range end is not a valid ANSI color code (0-255 needed, {} provided).", values[1]);
+        }
+    } else if is_valid_hex_color(&values[0]) {
+        if is_valid_hex_color(&values[1]) {
+            let hexcode1 = values[0].strip_prefix('#').unwrap_or(&values[0]);
+            let hexcode2 = values[1].strip_prefix('#').unwrap_or(&values[1]);
+    
+            let hex_pairs1: Vec<&str> = hexcode1
+                .as_bytes()
+                .chunks(2)
+                .map(|c| std::str::from_utf8(c).unwrap())
+                .collect();
+    
+            let hex_pairs2: Vec<&str> = hexcode2
+                .as_bytes()
+                .chunks(2)
+                .map(|c| std::str::from_utf8(c).unwrap())
+                .collect();
+    
+            print_hex_gradient(hex_pairs1, hex_pairs2);
         }
     } else if let Ok(_color_input2) = values[1].parse::<u8>() {
         eprintln!("⚠️  Input range start is not a valid ANSI color code (0-255 needed, {} provided).", values[0]);
