@@ -328,14 +328,6 @@ fn single(values: &[String], width: u8, numbered: bool) {
             .map(|chunk| str::from_utf8(chunk).unwrap())
             .collect();
         print_block_hex(hex_pairs, width);
-    } else if color_input.len() == 7 {
-        let hexcode = color_input.strip_prefix('#').unwrap_or(color_input);
-        let hex_pairs: Vec<&str> = hexcode
-            .as_bytes()
-            .chunks(2)
-            .map(|chunk| str::from_utf8(chunk).unwrap())
-            .collect();
-        print_block_hex(hex_pairs, width);
     } else {
         eprintln!("⚠️  Input color format or name ({}) not recognized (see -h or --help for more information).", color_input);
     }
