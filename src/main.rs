@@ -1,5 +1,5 @@
 use std::io::{self, Write};
-use std::str;
+use std::{str};
 extern crate clap;
 use clap::Parser;
 
@@ -126,21 +126,20 @@ fn print_blocks_ansi(color1: u8, color2: u8, width: u8, inline: bool, numbered: 
 }
 
 fn print_hex_gradient(hex_pairs1: Vec<&str>, hex_pairs2: Vec<&str>) {
-    // range starts
     let r1 = u8::from_str_radix(hex_pairs1[0], 16).unwrap_or(0);
     let g1 = u8::from_str_radix(hex_pairs1[1], 16).unwrap_or(0);
     let b1 = u8::from_str_radix(hex_pairs1[2], 16).unwrap_or(0);
-    // range ends
+
     let r2 = u8::from_str_radix(hex_pairs2[0], 16).unwrap_or(0);
     let g2 = u8::from_str_radix(hex_pairs2[1], 16).unwrap_or(0);
     let b2 = u8::from_str_radix(hex_pairs2[2], 16).unwrap_or(0);
-    // print buffers for each color
+
     let mut r: Vec<u8> = Vec::new();
     let mut g: Vec<u8> = Vec::new();
     let mut b: Vec<u8> = Vec::new();
-    // final print buffer
+
     let mut buffer = String::new();
-    // determine whether range is ascending or descending and fill each color buffer
+
     if r1 <= r2 {
         for i in 0..=(r2 - r1) {
             r.push((r1 + i) as u8);
@@ -169,61 +168,17 @@ fn print_hex_gradient(hex_pairs1: Vec<&str>, hex_pairs2: Vec<&str>) {
         }
     }
 
-    let r_len = r.len().try_into().unwrap_or(0);
-    let g_len = g.len().try_into().unwrap_or(0);
-    let b_len = b.len().try_into().unwrap_or(0);
-    dbg!("r_len: {}\ng_len: {}\nb_len: {}\n", r_len, g_len, b_len);
-    // determine the longest color buffer and pad the end of the shorter buffer(s) with the last color in each buffer until they are all the same size, then fill the final print buffer with those 
-    // [something about this doesn't work, and the final buffer never gets filled, this is already supposed to be the shitty hack only there to get it to work]
-    if r_len >= g_len && r_len >= b_len {
-        let g_padding = r_len - g_len;
-        let b_padding = r_len - b_len;
-        let g_padcolor = g[g.len() - 1];
-        let b_padcolor = b[b.len() - 1];
-        for _ in 0..=g_padding {
-            g.push(g_padcolor);
-        }
-        for _ in 0..=b_padding {
-            b.push(b_padcolor);
-        }
-        for i in r[0]..=r[r.len() - 1] {
-            dbg!("r: {}\ng: {}\nb: {}", r[i as usize], g[i as usize], b[i as usize]);
-            buffer.push_str(&format!("\x1b[48;2;{};{};{}m", r[i as usize], g[i as usize], b[i as usize]));
-            buffer.push_str(" ");
-        }
-    } else if b_len >= r_len && b_len >= g_len {
-            let r_padding = b_len - r_len;
-            let g_padding = b_len - g_len;
-            let r_padcolor = r[r.len() - 1];
-            let g_padcolor = g[g.len() - 1];
-            for _ in 0..=r_padding {
-                r.push(r_padcolor);
-            }
-            for _ in 0..=g_padding {
-                g.push(g_padcolor);
-            }
-            for i in b[0]..=b[b.len() - 1] {
-                dbg!("r: {}\ng: {}\nb: {}", r[i as usize], g[i as usize], b[i as usize]);
-                buffer.push_str(&format!("\x1b[48;2;{};{};{}m", r[i as usize], g[i as usize], b[i as usize]));
-                buffer.push_str(" ");
-            }    
-    } else if g_len >= b_len  && g_len >= r_len{
-            let r_padding = g_len - r_len;
-            let b_padding = g_len - b_len;
-            let r_padcolor = r[r.len() - 1];
-            let b_padcolor = b[b.len() - 1];
-            for _ in 0..=r_padding {
-                r.push(r_padcolor);
-            }
-            for _ in 0..=b_padding {
-                b.push(b_padcolor);
-            }
-            for i in g[0]..=g[g.len() - 1] {
-                dbg!("r: {}\ng: {}\nb: {}", r[i as usize], g[i as usize], b[i as usize]);
-                buffer.push_str(&format!("\x1b[48;2;{};{};{}m", r[i as usize], g[i as usize], b[i as usize]));
-                buffer.push_str(" ");
-            }
-    }
+    let max_len = r.len().max(g.len()).max(b.len());
+    r.resize(max_len, *r.last().unwrap());
+    g.resize(max_len, *g.last().unwrap());
+    b.resize(max_len, *b.last().unwrap());
+
+    for i in 0..max_len {
+        buffer.push_str(&format!(
+            "\x1b[48;2;{};{};{}m ",
+            r[i], g[i], b[i]
+        ));
+    }    
     buffer.push_str("\x1b[0m\n");
 
     let stdout = std::io::stdout();
@@ -345,6 +300,17 @@ fn print_rainbow() {
     let _ = handle.flush();
 }
 
+fn is_valid_hex_color(s: &str) -> bool {
+    let hex = s.strip_prefix('#').unwrap_or(s);
+    if hex.len() != 6 {
+        return false;
+    }
+    if hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        return true;
+    }
+    false
+}
+
 fn single(values: &[String], width: u8, numbered: bool) {
     let color_input: &str = &values[0];
     // it works but this logic is a mess and I hate it
@@ -354,7 +320,7 @@ fn single(values: &[String], width: u8, numbered: bool) {
         print_block_ansi(ansi_code, width, numbered);
     } else if let Ok(ansi_code) = color_input.parse::<u16>() {
         eprintln!("⚠️  Input color or format ({}) not recognized (see -h or --help for more information.)", ansi_code);
-    } else if color_input.len() == 6 {
+    } else if is_valid_hex_color(&color_input) {
         let hexcode = color_input;
         let hex_pairs: Vec<&str> = hexcode
             .as_bytes()
@@ -382,36 +348,25 @@ fn many(values: &[String], width: u8, inline: bool, numbered: bool) {
         } else {
             eprintln!("⚠️  Input range end is not a valid ANSI color code (0-255 needed, {} provided).", values[1]);
         }
-    } else if values[0].len() == 6 && values[1].len() == 6 {
-        let color_input1: &str = &values[0];
-        let color_input2: &str = &values[1];
-        let hex_pairs1: Vec<&str> = color_input1
-            .as_bytes()
-            .chunks(2)
-            .map(|chunk| str::from_utf8(chunk).unwrap())
-            .collect();
-        let hex_pairs2: Vec<&str> = color_input2
-            .as_bytes()
-            .chunks(2)
-            .map(|chunk| str::from_utf8(chunk).unwrap())
-            .collect();
-        print_hex_gradient(hex_pairs1, hex_pairs2);
-    } else if values[0].len() == 7 && values[1].len() == 7 {
-        let color_input1: &str = &values[0];
-        let color_input2: &str = &values[1];
-        let hexcode1 = color_input1.strip_prefix('#').unwrap_or(color_input1);
-        let hexcode2 = color_input2.strip_prefix('#').unwrap_or(color_input2);
-        let hex_pairs1: Vec<&str> = hexcode1
-            .as_bytes()
-            .chunks(2)
-            .map(|chunk| str::from_utf8(chunk).unwrap())
-            .collect();
-        let hex_pairs2: Vec<&str> = hexcode2
-            .as_bytes()
-            .chunks(2)
-            .map(|chunk| str::from_utf8(chunk).unwrap())
-            .collect();
-        print_hex_gradient(hex_pairs1, hex_pairs2);
+    } else if is_valid_hex_color(&values[0]) {
+        if is_valid_hex_color(&values[1]) {
+            let hexcode1 = values[0].strip_prefix('#').unwrap_or(&values[0]);
+            let hexcode2 = values[1].strip_prefix('#').unwrap_or(&values[1]);
+    
+            let hex_pairs1: Vec<&str> = hexcode1
+                .as_bytes()
+                .chunks(2)
+                .map(|c| std::str::from_utf8(c).unwrap())
+                .collect();
+    
+            let hex_pairs2: Vec<&str> = hexcode2
+                .as_bytes()
+                .chunks(2)
+                .map(|c| std::str::from_utf8(c).unwrap())
+                .collect();
+    
+            print_hex_gradient(hex_pairs1, hex_pairs2);
+        }
     } else if let Ok(_color_input2) = values[1].parse::<u8>() {
         eprintln!("⚠️  Input range start is not a valid ANSI color code (0-255 needed, {} provided).", values[0]);
     } else {
