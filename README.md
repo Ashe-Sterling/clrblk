@@ -16,6 +16,14 @@ clrblk is a command-line utility for printing color blocks in the terminal. It s
 
 ## Installation
 
+### AUR Installation
+```sh
+paru -S clrblk
+```
+or with yay:
+```sh
+yay -S clrblk
+```
 
 ### Manual Installation
 
