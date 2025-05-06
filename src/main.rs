@@ -37,9 +37,9 @@ struct Args {
     #[arg(short, long)]
     grayscale: bool,
 
-    /// Show a rainbow screensaver
+    /// Show a fullscreen rainbow gradient loop
     #[arg(short, long)]
-    screensaver: bool,
+    loop_gradient: bool,
 }
 
 
@@ -217,7 +217,6 @@ fn print_rainbow() {
 fn fullscreen_rainbow() {
     let stdout = io::stdout();
     let mut out = BufWriter::new(stdout.lock());
-    // Hide the cursor for a cleaner animation
     write!(out, "\x1b[?25l").ok();
     out.flush().ok();
 
@@ -324,7 +323,7 @@ fn main() {
         print_rainbow();
     } else if args.grayscale {
         print_grayscale();
-    } else if args.screensaver {
+    } else if args.loop_gradient {
         fullscreen_rainbow();
     } else if args.values.len() == 2 {
         many(&args.values, args.width, args.inline, args.numbered, args.fit);
