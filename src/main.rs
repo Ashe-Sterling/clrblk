@@ -1,11 +1,13 @@
-use std::io::{self, Write, BufWriter};
-use std::str;
+use std::{str, thread, time::Duration, io::{self, Write, BufWriter}};
 extern crate clap;
 use clap::Parser;
 use terminal_size::{Width, terminal_size};
 
+
 #[derive(Parser, Debug)]
 #[command(version, about = "A simple utility to show and test pretty (and not so pretty) colors.")]
+
+
 struct Args {
     /// Width of blocks
     #[arg(short, long, default_value_t = 6)]
@@ -34,7 +36,12 @@ struct Args {
     /// Print a grayscale gradient
     #[arg(short, long)]
     grayscale: bool,
+
+    /// Show a rainbow screensaver
+    #[arg(short, long)]
+    screensaver: bool,
 }
+
 
 fn print_block_ansi(color: u8, width: u8, numbered: bool) {
     let stdout = io::stdout();
@@ -52,6 +59,7 @@ fn print_block_ansi(color: u8, width: u8, numbered: bool) {
     let _ = writeln!(out, "\x1b[0m");
     let _ = out.flush();
 }
+
 
 fn print_blocks_ansi(color1: u8, color2: u8, width: u8, inline: bool, numbered: bool) {
     let stdout = io::stdout();
@@ -90,6 +98,7 @@ fn print_blocks_ansi(color1: u8, color2: u8, width: u8, inline: bool, numbered: 
 
     let _ = out.flush();
 }
+
 
 fn print_hex_gradient(hex1: Vec<&str>, hex2: Vec<&str>, fit_width: bool) {
     let r1 = u8::from_str_radix(hex1[0], 16).unwrap_or(0);
@@ -131,6 +140,7 @@ fn print_hex_gradient(hex1: Vec<&str>, hex2: Vec<&str>, fit_width: bool) {
     let _ = out.flush();
 }
 
+
 fn print_block_hex(hex_pairs: Vec<&str>, width: u8) {
     let r = u8::from_str_radix(hex_pairs[0], 16).unwrap_or(0);
     let g = u8::from_str_radix(hex_pairs[1], 16).unwrap_or(0);
@@ -147,35 +157,6 @@ fn print_block_hex(hex_pairs: Vec<&str>, width: u8) {
     let _ = out.flush();
 }
 
-fn named_color_to_ansi(input: &str) -> Option<u8> {
-    match input.to_lowercase().as_str() {
-        "black" => Some(0),
-        "red" => Some(1),
-        "green" => Some(2),
-        "yellow" => Some(3),
-        "blue" => Some(4),
-        "magenta" => Some(5),
-        "cyan" => Some(6),
-        "white" => Some(7),
-        "bright_black" | "gray" | "grey" => Some(8),
-        "bright_red" => Some(9),
-        "bright_green" => Some(10),
-        "bright_yellow" => Some(11),
-        "bright_blue" => Some(12),
-        "bright_magenta" => Some(13),
-        "bright_cyan" => Some(14),
-        "bright_white" => Some(15),
-        "orange" =>  {
-            eprintln!("⚠️  Orange is not an official ANSI color; printing approximation (208).");
-            Some(208)
-        },
-        "purple" =>  {
-            eprintln!("⚠️  Purple is not an official ANSI color; printing approximation (129).");
-            Some(129)
-        },
-        _ => None
-    }
-}
 
 fn print_grayscale() {
     let stdout = io::stdout();
@@ -193,6 +174,7 @@ fn print_grayscale() {
 
     let _ = out.flush();
 }
+
 
 fn print_rainbow() {
     let stdout = io::stdout();
@@ -231,10 +213,71 @@ fn print_rainbow() {
     let _ = out.flush();
 }
 
+
+fn fullscreen_rainbow() {
+    let stdout = io::stdout();
+    let mut out = BufWriter::new(stdout.lock());
+    // Hide the cursor for a cleaner animation
+    write!(out, "\x1b[?25l").ok();
+    out.flush().ok();
+
+    let mut phase: u8 = 0;
+    loop {
+        write!(out, "\x1b[H").ok();
+
+        let hue = phase;
+        let (r, g, b) = match hue {
+            0..=85   => (255 - hue * 3, hue * 3, 0),
+            86..=170 => (0, 255 - (hue - 85) * 3, (hue - 85) * 3),
+            _        => ((hue - 170) * 3, 0, 255 - (hue - 170) * 3),
+        };
+
+        write!(out, "\x1b[48;2;{};{};{}m\x1b[2J", r, g, b).ok();
+
+        out.flush().ok();
+        phase = phase.wrapping_add(1);
+
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
+
 fn is_valid_hex_color(s: &str) -> bool {
     let hex = s.strip_prefix('#').unwrap_or(s);
     hex.len() == 6 && hex.chars().all(|c| c.is_ascii_hexdigit())
 }
+
+
+fn named_color_to_ansi(input: &str) -> Option<u8> {
+    match input.to_lowercase().as_str() {
+        "black" => Some(0),
+        "red" => Some(1),
+        "green" => Some(2),
+        "yellow" => Some(3),
+        "blue" => Some(4),
+        "magenta" => Some(5),
+        "cyan" => Some(6),
+        "white" => Some(7),
+        "bright_black" | "gray" | "grey" => Some(8),
+        "bright_red" => Some(9),
+        "bright_green" => Some(10),
+        "bright_yellow" => Some(11),
+        "bright_blue" => Some(12),
+        "bright_magenta" => Some(13),
+        "bright_cyan" => Some(14),
+        "bright_white" => Some(15),
+        "orange" =>  {
+            eprintln!("⚠️  Orange is not an official ANSI color; printing approximation (208).");
+            Some(208)
+        },
+        "purple" =>  {
+            eprintln!("⚠️  Purple is not an official ANSI color; printing approximation (129).");
+            Some(129)
+        },
+        _ => None
+    }
+}
+
 
 fn single(values: &[String], width: u8, numbered: bool) {
     let input = &values[0];
@@ -252,6 +295,7 @@ fn single(values: &[String], width: u8, numbered: bool) {
         eprintln!("⚠️  Input color `{}` not recognized (see --help)", input);
     }
 }
+
 
 fn many(values: &[String], width: u8, inline: bool, numbered: bool, fit_width: bool) {
     let a = &values[0];
@@ -273,12 +317,15 @@ fn many(values: &[String], width: u8, inline: bool, numbered: bool, fit_width: b
     }
 }
 
+
 fn main() {
     let args = Args::parse();
     if args.rainbow {
         print_rainbow();
     } else if args.grayscale {
         print_grayscale();
+    } else if args.screensaver {
+        fullscreen_rainbow();
     } else if args.values.len() == 2 {
         many(&args.values, args.width, args.inline, args.numbered, args.fit);
     } else if args.values.len() == 1 {
