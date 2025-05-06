@@ -2,6 +2,7 @@ use std::io::{self, Write, BufWriter};
 use std::str;
 extern crate clap;
 use clap::Parser;
+use terminal_size::{Width, terminal_size};
 
 #[derive(Parser, Debug)]
 #[command(version, about = "A simple utility to show and test pretty (and not so pretty) colors.")]
@@ -18,6 +19,10 @@ struct Args {
     #[arg(short, long)]
     numbered: bool,
 
+    /// Fit hex gradient to full terminal width
+    #[arg(short, long)]
+    fit: bool,
+
     /// Color(s) to display: ANSI codes, names, or hex strings (#RRGGBB)
     #[arg(num_args = 1..=2)]
     values: Vec<String>,
@@ -30,8 +35,6 @@ struct Args {
     #[arg(short, long)]
     grayscale: bool,
 }
-
-
 
 fn print_block_ansi(color: u8, width: u8, numbered: bool) {
     let stdout = io::stdout();
@@ -88,7 +91,7 @@ fn print_blocks_ansi(color1: u8, color2: u8, width: u8, inline: bool, numbered: 
     let _ = out.flush();
 }
 
-fn print_hex_gradient(hex1: Vec<&str>, hex2: Vec<&str>) {
+fn print_hex_gradient(hex1: Vec<&str>, hex2: Vec<&str>, fit_width: bool) {
     let r1 = u8::from_str_radix(hex1[0], 16).unwrap_or(0);
     let g1 = u8::from_str_radix(hex1[1], 16).unwrap_or(0);
     let b1 = u8::from_str_radix(hex1[2], 16).unwrap_or(0);
@@ -100,7 +103,17 @@ fn print_hex_gradient(hex1: Vec<&str>, hex2: Vec<&str>) {
     let dr = (r2 as i16 - r1 as i16).abs() as usize;
     let dg = (g2 as i16 - g1 as i16).abs() as usize;
     let db = (b2 as i16 - b1 as i16).abs() as usize;
-    let steps = dr.max(dg).max(db).max(1);
+
+    let default_steps = dr.max(dg).max(db).max(1);
+
+    let steps = if fit_width {
+        match terminal_size() {
+            Some((Width(w), _)) if w >= 1 => (w - 1) as usize,
+            _ => default_steps,
+        }
+    } else {
+        default_steps
+    };
 
     let stdout = io::stdout();
     let mut out = BufWriter::new(stdout.lock());
@@ -240,7 +253,7 @@ fn single(values: &[String], width: u8, numbered: bool) {
     }
 }
 
-fn many(values: &[String], width: u8, inline: bool, numbered: bool) {
+fn many(values: &[String], width: u8, inline: bool, numbered: bool, fit_width: bool) {
     let a = &values[0];
     let b = &values[1];
     if let (Ok(c1), Ok(c2)) = (a.parse::<u8>(), b.parse::<u8>()) {
@@ -254,7 +267,7 @@ fn many(values: &[String], width: u8, inline: bool, numbered: bool) {
         let p2: Vec<&str> = h2.as_bytes().chunks(2)
             .map(|c| str::from_utf8(c).unwrap())
             .collect();
-        print_hex_gradient(p1, p2);
+        print_hex_gradient(p1, p2, fit_width);
     } else {
         eprintln!("⚠️  Invalid color/range: `{}` and `{}`", a, b);
     }
@@ -267,7 +280,7 @@ fn main() {
     } else if args.grayscale {
         print_grayscale();
     } else if args.values.len() == 2 {
-        many(&args.values, args.width, args.inline, args.numbered);
+        many(&args.values, args.width, args.inline, args.numbered, args.fit);
     } else if args.values.len() == 1 {
         single(&args.values, args.width, args.numbered);
     } else if args.values.is_empty() {
