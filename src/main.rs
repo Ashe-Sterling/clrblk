@@ -1,7 +1,8 @@
-use std::{str, thread, time::Duration, io::{self, Write, BufWriter}};
+use std::{str, thread, sync::{Arc, atomic::{AtomicBool, Ordering}}, time::Duration, io::{self, Write, BufWriter}};
 extern crate clap;
 use clap::Parser;
 use terminal_size::{Width, terminal_size};
+use ctrlc;
 
 
 #[derive(Parser, Debug)]
@@ -213,33 +214,36 @@ fn print_rainbow() {
     let _ = out.flush();
 }
 
-
+// TODO: fix cursor not showing after
 fn fullscreen_rainbow() {
-    let stdout = io::stdout();
-    let mut out = BufWriter::new(stdout.lock());
-    write!(out, "\x1b[?25l").ok();
-    out.flush().ok();
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    }).expect("Error setting Ctrl-C handler");
+
+    print!("\x1b[?25l");
+    io::stdout().flush().ok();
 
     let mut phase: u8 = 0;
-    loop {
-        write!(out, "\x1b[H").ok();
-
+    while running.load(Ordering::SeqCst) {
         let hue = phase;
-        let (r, g, b) = match hue {
+        let (r_val, g_val, b_val) = match hue {
             0..=85   => (255 - hue * 3, hue * 3, 0),
             86..=170 => (0, 255 - (hue - 85) * 3, (hue - 85) * 3),
             _        => ((hue - 170) * 3, 0, 255 - (hue - 170) * 3),
         };
 
-        write!(out, "\x1b[48;2;{};{};{}m\x1b[2J", r, g, b).ok();
+        print!("\x1b[H\x1b[48;2;{};{};{}m\x1b[2J", r_val, g_val, b_val);
+        io::stdout().flush().ok();
 
-        out.flush().ok();
         phase = phase.wrapping_add(1);
-
-        thread::sleep(Duration::from_millis(10));
+        thread::sleep(Duration::from_millis(20));
     }
-}
 
+    print!("\x1b[0m\x1b[?25h");
+    io::stdout().flush().ok();
+}
 
 fn is_valid_hex_color(s: &str) -> bool {
     let hex = s.strip_prefix('#').unwrap_or(s);
