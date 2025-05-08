@@ -73,7 +73,7 @@ clrblk f5a9b8 000000
 ```sh
 clrblk f5a9b8 000000 -f
 ```
-### Show a fullscreen gradient loop
+### Show a fullscreen gradient loop (+/- to adjust brightness)
 ```sh
 clrblk -l
 ```

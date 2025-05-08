@@ -38,7 +38,7 @@ struct Args {
     #[arg(short, long)]
     grayscale: bool,
 
-    /// Show a fullscreen rainbow gradient loop
+    /// Show a fullscreen rainbow gradient loop (+/- to adjust brightness)
     #[arg(short, long)]
     loop_gradient: bool,
 }
