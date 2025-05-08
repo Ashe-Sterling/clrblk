@@ -1,8 +1,8 @@
-use std::{str, thread, sync::{Arc, atomic::{AtomicBool, Ordering}}, time::Duration, io::{self, Write, BufWriter}};
+use std::{str, thread, sync::{Arc, atomic::{AtomicBool, Ordering}}, time::Duration, io::{Read, self, Write, BufWriter}};
 extern crate clap;
 use clap::Parser;
 use terminal_size::{Width, terminal_size};
-use ctrlc;
+use termion::{async_stdin, raw::IntoRawMode};
 
 
 #[derive(Parser, Debug)]
@@ -214,19 +214,34 @@ fn print_rainbow() {
     let _ = out.flush();
 }
 
-// TODO: fix cursor not showing after
+
 fn fullscreen_rainbow() {
     let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
-    ctrlc::set_handler(move || {
-        r.store(false, Ordering::SeqCst);
-    }).expect("Error setting Ctrl-C handler");
+    let mut stdout = io::stdout().into_raw_mode().unwrap();
 
-    print!("\x1b[?25l");
-    io::stdout().flush().ok();
+    write!(stdout, "\x1b[?25l").unwrap();
+    stdout.flush().unwrap();
 
     let mut phase: u8 = 0;
+    let mut value: u8 = 255;
+    let mut stdin = async_stdin().bytes();
+
     while running.load(Ordering::SeqCst) {
+        if let Some(Ok(input)) = stdin.next() {
+            match input {
+                b'+' | b'=' if value < 255 => {
+                    value = value.saturating_add(5);
+                }
+                b'-' if value > 0 => {
+                    value = value.saturating_sub(5);
+                }
+                3 => { // Ctrl-C byte
+                    running.store(false, Ordering::SeqCst);
+                }
+                _ => {}
+            }
+        }
+
         let hue = phase;
         let (r_val, g_val, b_val) = match hue {
             0..=85   => (255 - hue * 3, hue * 3, 0),
@@ -234,15 +249,19 @@ fn fullscreen_rainbow() {
             _        => ((hue - 170) * 3, 0, 255 - (hue - 170) * 3),
         };
 
-        print!("\x1b[H\x1b[48;2;{};{};{}m\x1b[2J", r_val, g_val, b_val);
-        io::stdout().flush().ok();
+        let r_scaled = (r_val as u16 * value as u16 / 255) as u8;
+        let g_scaled = (g_val as u16 * value as u16 / 255) as u8;
+        let b_scaled = (b_val as u16 * value as u16 / 255) as u8;
+
+        write!(stdout, "\x1b[H\x1b[2J\x1b[48;2;{};{};{}m", r_scaled, g_scaled, b_scaled).unwrap();
+        stdout.flush().unwrap();
 
         phase = phase.wrapping_add(1);
         thread::sleep(Duration::from_millis(20));
     }
 
-    print!("\x1b[0m\x1b[?25h");
-    io::stdout().flush().ok();
+    write!(stdout, "\x1b[0m\x1b[?25h").unwrap();
+    stdout.flush().unwrap();
 }
 
 fn is_valid_hex_color(s: &str) -> bool {
