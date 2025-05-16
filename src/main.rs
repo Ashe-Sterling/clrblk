@@ -1,12 +1,24 @@
-use std::{str, thread, sync::{Arc, atomic::{AtomicBool, Ordering}}, time::Duration, io::{Read, self, Write, BufWriter}};
-extern crate clap;
+use std::{
+        io::{self, BufWriter, Read, Write},
+        str,
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        },
+        thread,
+        time::Duration,
+};
+
 use clap::Parser;
-use terminal_size::{Width, terminal_size};
-use termion::{async_stdin, raw::IntoRawMode};
+use terminal_size::{terminal_size, Width};
+use termion::{
+    async_stdin, 
+    raw::IntoRawMode
+};
 
 
 #[derive(Parser, Debug)]
-#[command(version, about = "A simple utility to show and test pretty (and not so pretty) colors.")]
+#[command(version, about = "A simple utility to show and test pretty (and not so pretty) colors in the terminal.")]
 
 
 struct Args {
@@ -264,6 +276,7 @@ fn fullscreen_rainbow() {
     stdout.flush().unwrap();
 }
 
+
 fn is_valid_hex_color(s: &str) -> bool {
     let hex = s.strip_prefix('#').unwrap_or(s);
     hex.len() == 6 && hex.chars().all(|c| c.is_ascii_hexdigit())
@@ -272,31 +285,31 @@ fn is_valid_hex_color(s: &str) -> bool {
 
 fn named_color_to_ansi(input: &str) -> Option<u8> {
     match input.to_lowercase().as_str() {
-        "black" => Some(0),
-        "red" => Some(1),
-        "green" => Some(2),
-        "yellow" => Some(3),
-        "blue" => Some(4),
-        "magenta" => Some(5),
-        "cyan" => Some(6),
-        "white" => Some(7),
-        "bright_black" | "gray" | "grey" => Some(8),
-        "bright_red" => Some(9),
-        "bright_green" => Some(10),
-        "bright_yellow" => Some(11),
-        "bright_blue" => Some(12),
-        "bright_magenta" => Some(13),
-        "bright_cyan" => Some(14),
-        "bright_white" => Some(15),
-        "orange" =>  {
+        "black"                             => Some(0),
+        "red"                               => Some(1),
+        "green"                             => Some(2),
+        "yellow"                            => Some(3),
+        "blue"                              => Some(4),
+        "magenta"                           => Some(5),
+        "cyan"                              => Some(6),
+        "white"                             => Some(7),
+        "bright_black" | "gray" | "grey"    => Some(8),
+        "bright_red"                        => Some(9),
+        "bright_green"                      => Some(10),
+        "bright_yellow"                     => Some(11),
+        "bright_blue"                       => Some(12),
+        "bright_magenta"                    => Some(13),
+        "bright_cyan"                       => Some(14),
+        "bright_white"                      => Some(15),
+        "orange"                            =>  {
             eprintln!("⚠️  Orange is not an official ANSI color; printing approximation (208).");
             Some(208)
         },
-        "purple" =>  {
+        "purple"                            =>  {
             eprintln!("⚠️  Purple is not an official ANSI color; printing approximation (129).");
             Some(129)
         },
-        _ => None
+        _                                   => None
     }
 }
 
