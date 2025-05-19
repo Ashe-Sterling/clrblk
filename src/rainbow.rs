@@ -21,32 +21,28 @@ use termion::{
 /// Random gradient looping per-cell
 
 pub fn testingfn() -> std::io::Result<()> {
-    // enter raw mode & hide cursor
     let mut stdout = stdout().into_raw_mode()?;
     write!(stdout, "\x1b[?25l")?; // hide cursor
     stdout.flush()?;
 
-    // async stdin for non-blocking key reads
-    let mut stdin = async_stdin().bytes(); // :contentReference[oaicite:0]{index=0}
+    let mut stdin = async_stdin().bytes();
     let mut buffer = Buffer::new();
 
-    // loop until Ctrl-C (byte 3) is seen
     loop {
         if let Some(Ok(b)) = stdin.next() {
-            if b == 3 {
+            if b == 3 { // ctrl-c byte
                 break;
             }
         }
 
         buffer.resize();
         buffer.tick();
-        buffer.render(&mut stdout);    // no `?` here
-        stdout.flush()?;               // catch any I/O errors
+        buffer.render(&mut stdout);
+        stdout.flush()?;
 
         thread::sleep(Duration::from_millis(15));
     }
 
-    // restore terminal
     write!(stdout, "\x1b[0m\x1b[?25h")?; // reset attrs + show cursor
     stdout.flush()?;
     Ok(())
