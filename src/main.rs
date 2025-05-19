@@ -6,24 +6,8 @@ mod validate;
 
 use clap::Parser;
 use cli::{many, single, Args};
-use rainbow::{Buffer, fullscreen_rainbow, print_grayscale, print_rainbow};
-use termion::raw::IntoRawMode;
-use std::io::stdout;
-use std::{self, thread};
-use std::time::Duration;
+use rainbow::{fullscreen_rainbow, print_grayscale, print_rainbow, testingfn};
 
-
-fn testingfn() -> std::io::Result<()> {
-    let mut stdout = stdout().into_raw_mode()?;
-    let mut buffer = Buffer::new();
-
-    loop {
-        buffer.resize();
-        buffer.tick();
-        buffer.render(&mut stdout);
-        thread::sleep(Duration::from_millis(15));
-    }
-}
 
 fn main() {
     let args = Args::parse();

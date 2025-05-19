@@ -1,8 +1,7 @@
 use std::{
-        io::{self, BufWriter, Read, Write},
+        io::{self, stdout, BufWriter, Read, Write},
         sync::{
-            Arc,
-            atomic::{AtomicBool, Ordering},
+            atomic::{AtomicBool, Ordering}, Arc
         },
         thread,
         time::Duration,
@@ -20,6 +19,41 @@ use termion::{
 
 //////////////////////////////////////////////////////////////////////////////////////////
 /// Random gradient looping per-cell
+
+pub fn testingfn() -> std::io::Result<()> {
+    // enter raw mode & hide cursor
+    let mut stdout = stdout().into_raw_mode()?;
+    write!(stdout, "\x1b[?25l")?; // hide cursor
+    stdout.flush()?;
+
+    // async stdin for non-blocking key reads
+    let mut stdin = async_stdin().bytes(); // :contentReference[oaicite:0]{index=0}
+    let mut buffer = Buffer::new();
+
+    // loop until Ctrl-C (byte 3) is seen
+    loop {
+        if let Some(Ok(b)) = stdin.next() {
+            if b == 3 {
+                break;
+            }
+        }
+
+        buffer.resize();
+        buffer.tick();
+        buffer.render(&mut stdout);    // no `?` here
+        stdout.flush()?;               // catch any I/O errors
+
+        thread::sleep(Duration::from_millis(15));
+    }
+
+    // restore terminal
+    write!(stdout, "\x1b[0m\x1b[?25h")?; // reset attrs + show cursor
+    stdout.flush()?;
+    Ok(())
+}
+
+
+
 
 // a single cell containing current and goal RGB values
 struct Cell {
@@ -66,7 +100,7 @@ fn approach(current: u8, target: u8) -> u8 {
 }
 
 
-pub struct Buffer {
+struct Buffer {
     width: u16,
     height: u16,
     cells: Vec<Cell>,
@@ -74,7 +108,7 @@ pub struct Buffer {
 
 impl Buffer {
     // create buffer matching current terminal size, with random cell colors and goals
-    pub fn new() -> Self {
+    fn new() -> Self {
         let (w, h) = terminal_size().unwrap();
         let mut rng = rand::rng();
         let size = (w as usize) * (h as usize);
@@ -83,7 +117,7 @@ impl Buffer {
     }
 
     // resize & reallocate new cells (call if terminal resized)
-    pub fn resize(&mut self) {
+    fn resize(&mut self) {
         let (w, h) = terminal_size().unwrap();
         if w != self.width || h != self.height {
             self.width = w;
@@ -95,14 +129,14 @@ impl Buffer {
     }
 
     // advance each cell one step toward its goal
-    pub fn tick(&mut self) {
+    fn tick(&mut self) {
         let mut rng = rand::rng();
         for cell in &mut self.cells {
             cell.step(&mut rng);
         }
     }
 
-    pub fn render(&self, out: &mut impl Write) {
+    fn render(&self, out: &mut impl Write) {
         write!(out, "{}{}", cursor::Goto(1, 1), clear::All).unwrap();
         for row in 0..self.height {
             for col in 0..self.width {
