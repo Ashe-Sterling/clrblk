@@ -42,6 +42,10 @@ pub struct Args {
     /// Show a fullscreen rainbow gradient loop (+/- to adjust brightness)
     #[arg(short, long)]
     pub loop_gradient: bool,
+
+    /// Show a fullscreen grid of cells of random colors that each fade to new random colors
+    #[arg(long)]
+    pub crazy: bool
 }
 
 pub fn single(values: &[String], width: u8, numbered: bool) {
