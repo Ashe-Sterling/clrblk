@@ -20,7 +20,7 @@ use termion::{
 //////////////////////////////////////////////////////////////////////////////////////////
 /// Random gradient looping per-cell
 
-pub fn testingfn() -> std::io::Result<()> {
+pub fn crazyfn() -> std::io::Result<()> {
     let mut stdout = stdout().into_raw_mode()?;
     write!(stdout, "\x1b[?25l")?; // hide cursor
     stdout.flush()?;
@@ -47,8 +47,6 @@ pub fn testingfn() -> std::io::Result<()> {
     stdout.flush()?;
     Ok(())
 }
-
-
 
 
 // a single cell containing current and goal RGB values
