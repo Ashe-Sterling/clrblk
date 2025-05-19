@@ -42,6 +42,10 @@ pub struct Args {
     /// Show a fullscreen rainbow gradient loop (+/- to adjust brightness)
     #[arg(short, long)]
     pub loop_gradient: bool,
+
+    /// testing
+    #[arg(long)]
+    pub testing: bool
 }
 
 pub fn single(values: &[String], width: u8, numbered: bool) {
