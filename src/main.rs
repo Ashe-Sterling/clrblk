@@ -1,8 +1,5 @@
-<<<<<<< HEAD
 #![feature(portable_simd)]
 
-=======
->>>>>>> a848777fd501049345a6ee903198d26b6af59c0f
 mod ansi;
 mod cli;
 mod hex;
@@ -12,10 +9,7 @@ mod validate;
 use clap::Parser;
 use cli::{many, single, Args};
 use rainbow::{fullscreen_rainbow, print_grayscale, print_rainbow, crazyfn};
-<<<<<<< HEAD
 
-=======
->>>>>>> a848777fd501049345a6ee903198d26b6af59c0f
 
 
 fn main() {

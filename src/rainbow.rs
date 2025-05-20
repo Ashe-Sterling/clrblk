@@ -1,29 +1,14 @@
 use std::{
-<<<<<<< HEAD
     io::{self, stdout, BufWriter, Read, Write}, sync::{atomic::{AtomicBool, Ordering}, Arc}, thread, time::Duration
-=======
-        io::{self, stdout, BufWriter, Read, Write},
-        sync::{
-            atomic::{AtomicBool, Ordering}, Arc
-        },
-        thread,
-        time::Duration,
->>>>>>> a848777fd501049345a6ee903198d26b6af59c0f
 };
 
 use rand::Rng;
 use termion::{
     async_stdin,
     clear,
-<<<<<<< HEAD
     cursor,
     raw::IntoRawMode,
     terminal_size,
-=======
-    cursor, 
-    raw::IntoRawMode,
-    terminal_size
->>>>>>> a848777fd501049345a6ee903198d26b6af59c0f
 };
 
 use std::simd::{cmp::SimdPartialOrd, prelude::{Simd, SimdPartialEq, SimdUint}};
@@ -201,138 +186,6 @@ impl Buffer {
 /// End random gradient looping per-cell
 //////////////////////////////////////////////////////////////////////////////////////////
 
-
-
-//////////////////////////////////////////////////////////////////////////////////////////
-/// Random gradient looping per-cell
-
-pub fn crazyfn() -> std::io::Result<()> {
-    let mut stdout = stdout().into_raw_mode()?;
-    write!(stdout, "\x1b[?25l")?; // hide cursor
-    stdout.flush()?;
-
-    let mut stdin = async_stdin().bytes();
-    let mut buffer = Buffer::new();
-
-    loop {
-        if let Some(Ok(b)) = stdin.next() {
-            if b == 3 { // ctrl-c byte
-                break;
-            }
-        }
-
-        buffer.resize();
-        buffer.tick();
-        buffer.render(&mut stdout);
-        stdout.flush()?;
-
-        thread::sleep(Duration::from_millis(15));
-    }
-
-    write!(stdout, "\x1b[0m\x1b[?25h")?; // reset attrs + show cursor
-    stdout.flush()?;
-    Ok(())
-}
-
-
-// a single cell containing current and goal RGB values
-struct Cell {
-    r: u8,
-    g: u8,
-    b: u8,
-    gr: u8,
-    gg: u8,
-    gb: u8,
-}
-
-impl Cell {
-    // initialize a cell with random current and goal colors
-    fn new<R: Rng>(rng: &mut R) -> Self {
-        let r  = rng.random(); let g  = rng.random(); let b  = rng.random();
-        let gr = rng.random(); let gg = rng.random(); let gb = rng.random();
-        Cell { r, g, b, gr, gg, gb }
-    }
-
-    // move current color one step towards goal
-    fn step<R: Rng>(&mut self, rng: &mut R) {
-        self.r = approach(self.r, self.gr);
-        self.g = approach(self.g, self.gg);
-        self.b = approach(self.b, self.gb);
-        
-        // when goal is reached, pick a new random goal
-        if self.r == self.gr && self.g == self.gg && self.b == self.gb {
-            self.gr = rng.random();
-            self.gg = rng.random();
-            self.gb = rng.random();
-        }
-    }
-}
-
-// helper to increment or decrement towards goal
-fn approach(current: u8, target: u8) -> u8 {
-    if current < target {
-        current.saturating_add(1)
-    } else if current > target {
-        current.saturating_sub(1)
-    } else {
-        current
-    }
-}
-
-
-struct Buffer {
-    width: u16,
-    height: u16,
-    cells: Vec<Cell>,
-}
-
-impl Buffer {
-    // create buffer matching current terminal size, with random cell colors and goals
-    fn new() -> Self {
-        let (w, h) = terminal_size().unwrap();
-        let mut rng = rand::rng();
-        let size = (w as usize) * (h as usize);
-        let cells = (0..size).map(|_| Cell::new(&mut rng)).collect();
-        Buffer { width: w, height: h, cells }
-    }
-
-    // resize & reallocate new cells (call if terminal resized)
-    fn resize(&mut self) {
-        let (w, h) = terminal_size().unwrap();
-        if w != self.width || h != self.height {
-            self.width = w;
-            self.height = h;
-            let mut rng = rand::rng();
-            let size = (w as usize) * (h as usize);
-            self.cells = (0..size).map(|_| Cell::new(&mut rng)).collect();
-        }
-    }
-
-    // advance each cell one step toward its goal
-    fn tick(&mut self) {
-        let mut rng = rand::rng();
-        for cell in &mut self.cells {
-            cell.step(&mut rng);
-        }
-    }
-
-    fn render(&self, out: &mut impl Write) {
-        write!(out, "{}{}", cursor::Goto(1, 1), clear::All).unwrap();
-        for row in 0..self.height {
-            for col in 0..self.width {
-                let idx = (row as usize) * (self.width as usize) + (col as usize);
-                let c = &self.cells[idx];
-                write!(out, "\x1b[48;2;{};{};{}m ", c.r, c.g, c.b).unwrap();
-            }
-            write!(out, "\r\n").unwrap();
-        }
-        write!(out, "\x1b[0m").unwrap();
-        out.flush().unwrap();
-    }
-}
-
-/// End random gradient looping per-cell
-//////////////////////////////////////////////////////////////////////////////////////////
 
 
 pub fn print_grayscale() {
