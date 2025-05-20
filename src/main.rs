@@ -1,12 +1,15 @@
-mod cli;
+#![feature(portable_simd)]
+
 mod ansi;
+mod cli;
 mod hex;
 mod rainbow;
 mod validate;
 
 use clap::Parser;
 use cli::{many, single, Args};
-use rainbow::{fullscreen_rainbow, print_grayscale, print_rainbow};
+use rainbow::{fullscreen_rainbow, print_grayscale, print_rainbow, crazyfn};
+
 
 
 fn main() {
@@ -17,6 +20,8 @@ fn main() {
         print_grayscale();
     } else if args.loop_gradient {
         fullscreen_rainbow();
+    } else if args.crazy {
+        let _ = crazyfn();
     } else if args.values.len() == 2 {
         many(&args.values, args.width, args.inline, args.numbered, args.fit);
     } else if args.values.len() == 1 {
