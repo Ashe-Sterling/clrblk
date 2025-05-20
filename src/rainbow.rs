@@ -11,7 +11,7 @@ use termion::{
     terminal_size,
 };
 
-use std::simd::{cmp::SimdPartialOrd, prelude::{Simd, SimdPartialEq, SimdUint}};
+use std::simd::{cmp::SimdPartialOrd, prelude::{Simd, SimdPartialEq}};
 
 //////////////////////////////////////////////////////////////////////////////////////////
 /// Random gradient looping per-cell, now with SIMD™
@@ -42,17 +42,6 @@ pub fn crazyfn() -> std::io::Result<()> {
     write!(stdout, "\x1b[0m\x1b[?25h")?; // reset attrs + show cursor
     stdout.flush()?;
     Ok(())
-}
-
-// helper to increment or decrement towards goal
-fn approach(current: u8, target: u8) -> u8 {
-    if current < target {
-        current.saturating_add(1)
-    } else if current > target {
-        current.saturating_sub(1)
-    } else {
-        current
-    }
 }
 
 
@@ -119,52 +108,53 @@ impl Buffer {
         const LANES: usize = 64;
         let len = self.r.len();
         let chunks = len / LANES;
-
+    
         for i in 0..chunks {
             let base = i * LANES;
-
-            let r = Simd::<u8, LANES>::from_slice(&self.r[base..base + LANES]);
-            let g = Simd::<u8, LANES>::from_slice(&self.g[base..base + LANES]);
-            let b = Simd::<u8, LANES>::from_slice(&self.b[base..base + LANES]);
-            let gr = Simd::<u8, LANES>::from_slice(&self.gr[base..base + LANES]);
-            let gg = Simd::<u8, LANES>::from_slice(&self.gg[base..base + LANES]);
-            let gb = Simd::<u8, LANES>::from_slice(&self.gb[base..base + LANES]);
-
-            let r_new = r.simd_lt(gr).select(r.saturating_add(Simd::splat(1)),
-              r.simd_gt(gr).select(r.saturating_sub(Simd::splat(1)), r));
-            let g_new = g.simd_lt(gg).select(g.saturating_add(Simd::splat(1)),
-              g.simd_gt(gg).select(g.saturating_sub(Simd::splat(1)), g));
-            let b_new = b.simd_lt(gb).select(b.saturating_add(Simd::splat(1)),
-              b.simd_gt(gb).select(b.saturating_sub(Simd::splat(1)), b));
-
-            // write back
-            self.r[base..base + LANES].copy_from_slice(r_new.as_array());
-            self.g[base..base + LANES].copy_from_slice(g_new.as_array());
-            self.b[base..base + LANES].copy_from_slice(b_new.as_array());
-
-            // compare
+    
+            // SIMD loads from slice
+            let r    = Simd::<u8, LANES>::from_slice(&self.r[base..base + LANES]);
+            let g    = Simd::<u8, LANES>::from_slice(&self.g[base..base + LANES]);
+            let b    = Simd::<u8, LANES>::from_slice(&self.b[base..base + LANES]);
+            let gr   = Simd::<u8, LANES>::from_slice(&self.gr[base..base + LANES]);
+            let gg   = Simd::<u8, LANES>::from_slice(&self.gg[base..base + LANES]);
+            let gb   = Simd::<u8, LANES>::from_slice(&self.gb[base..base + LANES]);
+    
+            let one = Simd::splat(1);
+            
+            // SIMD compare and 
+            let r_new = r.simd_lt(gr)
+                .select(r + one, r.simd_gt(gr).select(r - one, r));
+            let g_new = g.simd_lt(gg)
+                .select(g + one, g.simd_gt(gg).select(g - one, g));
+            let b_new = b.simd_lt(gb)
+                .select(b + one, b.simd_gt(gb).select(b - one, b));
+    
+            // SIMD stores back to slice
+            r_new.copy_to_slice(&mut self.r[base..base + LANES]);
+            g_new.copy_to_slice(&mut self.g[base..base + LANES]);
+            b_new.copy_to_slice(&mut self.b[base..base + LANES]);
+    
+            // mask lanes that reached their goal
             let done = r_new.simd_eq(gr) & g_new.simd_eq(gg) & b_new.simd_eq(gb);
-            let mask = done.to_bitmask();
-
+    
+            // generate new random goals
+            let mut gr_buf = [0u8; LANES];
+            let mut gg_buf = [0u8; LANES];
+            let mut gb_buf = [0u8; LANES];
             for j in 0..LANES {
-                if (mask & (1 << j)) != 0 {
-                    self.gr[base + j] = rng.random();
-                    self.gg[base + j] = rng.random();
-                    self.gb[base + j] = rng.random();
-                }
+                gr_buf[j] = rng.random();
+                gg_buf[j] = rng.random();
+                gb_buf[j] = rng.random();
             }
-        }
-
-        for i in (chunks * LANES)..len {
-            self.r[i] = approach(self.r[i], self.gr[i]);
-            self.g[i] = approach(self.g[i], self.gg[i]);
-            self.b[i] = approach(self.b[i], self.gb[i]);
-
-            if self.r[i] == self.gr[i] && self.g[i] == self.gg[i] && self.b[i] == self.gb[i] {
-                self.gr[i] = rng.random();
-                self.gg[i] = rng.random();
-                self.gb[i] = rng.random();
-            }
+            let new_gr = Simd::from_array(gr_buf);
+            let new_gg = Simd::from_array(gg_buf);
+            let new_gb = Simd::from_array(gb_buf);
+    
+            // masked store of new goals
+            new_gr.store_select(&mut self.gr[base..base + LANES], done);
+            new_gg.store_select(&mut self.gg[base..base + LANES], done);
+            new_gb.store_select(&mut self.gb[base..base + LANES], done);
         }
     }
 
