@@ -69,13 +69,20 @@ clrblk 16 231
 ```sh
 clrblk f5a9b8 000000
 ```
+
 #### Fit hex gradient to terminal width
 ```sh
 clrblk f5a9b8 000000 -f
 ```
+
 ### Show a fullscreen gradient loop (+/- to adjust brightness)
 ```sh
 clrblk -l
+```
+
+### Show a randomized fullscreen per-cell gradient loop (ctrl-c to stop)
+```sh
+clrblk --crazy
 ```
 
 #### Set block width
