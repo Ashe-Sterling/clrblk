@@ -95,8 +95,7 @@ clrblk -l
 ```
 
 ### Show a full screen of random color blocks that all fade to new random colors independently
-This exists as a demo for SIMD operations, designed for AVX2+
+This exists more as a technical demo for portable SIMD operations in Rust (still looks cool though)
 ```sh
 clrblk --crazy
 ```
-
