@@ -20,7 +20,14 @@ use std::simd::{cmp::SimdPartialOrd, prelude::{Simd, SimdPartialEq}};
 /// Random gradient looping per-cell, now with SIMD™
 
 // number of SIMD lanes for u8's
+#[cfg(target_feature = "avx512f")]
 const LANES: usize = 64;
+#[cfg(all(not(target_feature = "avx512f"), target_feature = "avx2"))]
+const LANES: usize = 32;
+#[cfg(all(not(target_feature = "avx512f"), not(target_feature = "avx2"), target_feature = "sse2"))]
+const LANES: usize = 16;
+#[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "sse2")))]
+const LANES: usize = 1; // fallback to scalar
 
 pub fn crazyfn() -> io::Result<()> {
     let mut stdout = stdout().into_raw_mode()?;
