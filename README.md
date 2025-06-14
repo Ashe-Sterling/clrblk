@@ -69,13 +69,21 @@ clrblk 16 231
 ```sh
 clrblk f5a9b8 000000
 ```
+
 #### Fit hex gradient to terminal width
 ```sh
 clrblk f5a9b8 000000 -f
 ```
+
 ### Show a fullscreen gradient loop (+/- to adjust brightness)
 ```sh
 clrblk -l
+```
+
+### Show a full screen of random color blocks that all fade to rancom colors independently.
+#### This exists as a demo for SIMD operations, designed for AVX2+
+```sh
+clrblk --crazy
 ```
 
 #### Set block width
