@@ -26,7 +26,7 @@ yay -S clrblk
 ```
 
 ### Manual Installation
-I recommend building with level 3 optimizations and targeting your CPU:
+I recommend building with level 3 optimizations and targeting your CPU if you plan to test SIMD using the --crazy function:
 ```sh
 export RUSTFLAGS="-C opt-level=3 -C target-cpu=native"
 ```
