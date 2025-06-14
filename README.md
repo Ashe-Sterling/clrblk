@@ -54,6 +54,16 @@ clrblk [OPTIONS] [color(1)] [color(2)]
 clrblk 34
 ```
 
+#### Set block width
+```sh
+clrblk -w 10
+```
+
+#### Print an inline range of ANSI colors
+```sh
+clrblk -i 16 231
+```
+
 #### Print a hex color block
 ```sh
 clrblk #ff5733
@@ -90,12 +100,3 @@ This exists as a demo for SIMD operations, designed for AVX2+
 clrblk --crazy
 ```
 
-#### Set block width
-```sh
-clrblk -w 10
-```
-
-#### Print an inline range of ANSI colors
-```sh
-clrblk -i 16 231
-```
