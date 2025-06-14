@@ -20,13 +20,17 @@ clrblk is a command-line utility for printing color blocks in the terminal. It s
 ```sh
 paru -S clrblk
 ```
-or with yay:
+or with yay (if you're not cool enough for paru):
 ```sh
 yay -S clrblk
 ```
 
 ### Manual Installation
-
+I recommend building with level 3 optimizations and targeting your CPU:
+```sh
+export RUSTFLAGS="-C opt-level=3 -C target-cpu=native"
+```
+Build it:
 ```sh
 git clone https://gitlab.com/ashe.sterling/clrblk.git
 cd clrblk
@@ -40,10 +44,10 @@ cp target/release/clrblk /path/to/path/in/$PATH
 ## Usage
 
 ```sh
-clrblk [OPTIONS] <color(1) [color(2)]>
+clrblk [OPTIONS] [color(1)] [color(2)]
 ```
 
-### Examples
+## Examples
 
 #### Print a single ANSI color block
 ```sh
@@ -80,8 +84,8 @@ clrblk f5a9b8 000000 -f
 clrblk -l
 ```
 
-### Show a full screen of random color blocks that all fade to rancom colors independently.
-#### This exists as a demo for SIMD operations, designed for AVX2+
+### Show a full screen of random color blocks that all fade to new random colors independently
+This exists as a demo for SIMD operations, designed for AVX2+
 ```sh
 clrblk --crazy
 ```
