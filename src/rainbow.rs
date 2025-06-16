@@ -1,8 +1,5 @@
 use std::{
-    io::{self, stdout, BufWriter, Read, Write},
-    sync::{atomic::{AtomicBool, Ordering}, Arc},
-    thread,
-    time::Duration,
+    io::{self, stdout, BufWriter, Read, Write}, sync::{atomic::{AtomicBool, Ordering}, Arc}, thread, time::Duration
 };
 
 use rand::{rngs::ThreadRng, Rng};
@@ -115,12 +112,15 @@ impl Buffer {
     }
 
     fn tick(&mut self) {
+        // get the chunk size
         let len = self.r.len();
         let chunks = len / LANES;
 
+        // looping through each chunk
         for i in 0..chunks {
             let base = i * LANES;
 
+            // grab the current and goal colors as vectors
             let r_vec  = Simd::<u8, LANES>::from_slice(&self.r[base..][..LANES]);
             let g_vec  = Simd::<u8, LANES>::from_slice(&self.g[base..][..LANES]);
             let b_vec  = Simd::<u8, LANES>::from_slice(&self.b[base..][..LANES]);
@@ -130,6 +130,7 @@ impl Buffer {
 
             let one = Simd::splat(1);
 
+            // use simd < and > to determine whether we are adding or subtracting 1 for this tick
             let r_new = r_vec.simd_lt(gr_vec)
                 .select(r_vec + one, r_vec.simd_gt(gr_vec).select(r_vec - one, r_vec));
             let g_new = g_vec.simd_lt(gg_vec)
@@ -137,12 +138,15 @@ impl Buffer {
             let b_new = b_vec.simd_lt(gb_vec)
                 .select(b_vec + one, b_vec.simd_gt(gb_vec).select(b_vec - one, b_vec));
 
+            // write this tick's color values to the output buffer
             r_new.copy_to_slice(&mut self.r[base..][..LANES]);
             g_new.copy_to_slice(&mut self.g[base..][..LANES]);
             b_new.copy_to_slice(&mut self.b[base..][..LANES]);
 
+            // use simd == to determine whether we have reached the goal color 
             let done = r_new.simd_eq(gr_vec) & g_new.simd_eq(gg_vec) & b_new.simd_eq(gb_vec);
 
+            // create a buffer of new random values for this chunk
             let mut gr_buf = [0u8; LANES];
             let mut gg_buf = [0u8; LANES];
             let mut gb_buf = [0u8; LANES];
@@ -150,26 +154,77 @@ impl Buffer {
             self.rng.fill(&mut gg_buf[..]);
             self.rng.fill(&mut gb_buf[..]);
 
+            // make it simd
             let new_gr = Simd::from_array(gr_buf);
             let new_gg = Simd::from_array(gg_buf);
             let new_gb = Simd::from_array(gb_buf);
 
+            // apply the new random simd colors buffer to the goal colors, masked to the cells which have reached the goal color this tick
             new_gr.store_select(&mut self.gr[base..][..LANES], done);
             new_gg.store_select(&mut self.gg[base..][..LANES], done);
             new_gb.store_select(&mut self.gb[base..][..LANES], done);
         }
 
-        for idx in (chunks * LANES)..len {
-            for (v, t) in [(&mut self.r, &mut self.gr), (&mut self.g, &mut self.gg), (&mut self.b, &mut self.gb)] {
-                if v[idx] < t[idx] {
-                    v[idx] += 1;
-                } else if v[idx] > t[idx] {
-                    v[idx] -= 1;
-                } else {
-                    t[idx] = self.rng.random();
+            // handle the remaining unaligned chunks
+            let remaining = len % LANES;
+            if remaining != 0 {
+                let start = chunks * LANES;
+
+                // load valid lanes into full-width arrays
+                let mut r_buf  = [0u8; LANES];
+                let mut g_buf  = [0u8; LANES];
+                let mut b_buf  = [0u8; LANES];
+                let mut gr_buf = [0u8; LANES];
+                let mut gg_buf = [0u8; LANES];
+                let mut gb_buf = [0u8; LANES];
+                r_buf[..remaining].copy_from_slice(&self.r[start..]);
+                g_buf[..remaining].copy_from_slice(&self.g[start..]);
+                b_buf[..remaining].copy_from_slice(&self.b[start..]);
+                gr_buf[..remaining].copy_from_slice(&self.gr[start..]);
+                gg_buf[..remaining].copy_from_slice(&self.gg[start..]);
+                gb_buf[..remaining].copy_from_slice(&self.gb[start..]);
+
+                // grab current and goal colors as vectors
+                let r_vec  = Simd::from_array(r_buf);
+                let g_vec  = Simd::from_array(g_buf);
+                let b_vec  = Simd::from_array(b_buf);
+                let gr_vec = Simd::from_array(gr_buf);
+                let gg_vec = Simd::from_array(gg_buf);
+                let gb_vec = Simd::from_array(gb_buf);
+
+                let one   = Simd::splat(1u8);
+
+                // compute ±1 step
+                let r_new = r_vec.simd_lt(gr_vec)
+                    .select(r_vec + one, r_vec.simd_gt(gr_vec).select(r_vec - one, r_vec));
+                let g_new = g_vec.simd_lt(gg_vec)
+                    .select(g_vec + one, g_vec.simd_gt(gg_vec).select(g_vec - one, g_vec));
+                let b_new = b_vec.simd_lt(gb_vec)
+                    .select(b_vec + one, b_vec.simd_gt(gb_vec).select(b_vec - one, b_vec));
+                let done  = r_new.simd_eq(gr_vec) & g_new.simd_eq(gg_vec) & b_new.simd_eq(gb_vec);
+
+                // write this tick's values
+                let mut tmp_r = [0u8; LANES];
+                let mut tmp_g = [0u8; LANES];
+                let mut tmp_b = [0u8; LANES];
+                r_new.copy_to_slice(&mut tmp_r);
+                g_new.copy_to_slice(&mut tmp_g);
+                b_new.copy_to_slice(&mut tmp_b);
+
+                self.r[start..start+remaining].copy_from_slice(&tmp_r[..remaining]);
+                self.g[start..start+remaining].copy_from_slice(&tmp_g[..remaining]);
+                self.b[start..start+remaining].copy_from_slice(&tmp_b[..remaining]);
+
+                // get the mask as an array we can index into and apply goal colors maskingly
+                let done_arr: [bool; LANES] = done.to_array();
+                for i in 0..remaining {
+                    if done_arr[i] {
+                        self.gr[start + i] = self.rng.random();
+                        self.gg[start + i] = self.rng.random();
+                        self.gb[start + i] = self.rng.random();
+                    }
                 }
             }
-        }
     }
 
     fn render(&self, out: &mut impl Write) -> io::Result<()> {
@@ -188,7 +243,8 @@ impl Buffer {
     }
 }
 
-
+/// End of random gradient looping per-cell
+//////////////////////////////////////////////////////////////////////////////////////////
 
 
 pub fn print_grayscale() {
