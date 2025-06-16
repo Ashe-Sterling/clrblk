@@ -165,66 +165,66 @@ impl Buffer {
             new_gb.store_select(&mut self.gb[base..][..LANES], done);
         }
 
-            // handle the remaining unaligned chunks
-            let remaining = len % LANES;
-            if remaining != 0 {
-                let start = chunks * LANES;
+        // handle the remaining unaligned chunks
+        let remaining = len % LANES;
+        if remaining != 0 {
+            let start = chunks * LANES;
 
-                // load valid lanes into full-width arrays
-                let mut r_buf  = [0u8; LANES];
-                let mut g_buf  = [0u8; LANES];
-                let mut b_buf  = [0u8; LANES];
-                let mut gr_buf = [0u8; LANES];
-                let mut gg_buf = [0u8; LANES];
-                let mut gb_buf = [0u8; LANES];
-                r_buf[..remaining].copy_from_slice(&self.r[start..]);
-                g_buf[..remaining].copy_from_slice(&self.g[start..]);
-                b_buf[..remaining].copy_from_slice(&self.b[start..]);
-                gr_buf[..remaining].copy_from_slice(&self.gr[start..]);
-                gg_buf[..remaining].copy_from_slice(&self.gg[start..]);
-                gb_buf[..remaining].copy_from_slice(&self.gb[start..]);
+            // load valid lanes into full-width arrays
+            let mut r_buf  = [0u8; LANES];
+            let mut g_buf  = [0u8; LANES];
+            let mut b_buf  = [0u8; LANES];
+            let mut gr_buf = [0u8; LANES];
+            let mut gg_buf = [0u8; LANES];
+            let mut gb_buf = [0u8; LANES];
+            r_buf[..remaining].copy_from_slice(&self.r[start..]);
+            g_buf[..remaining].copy_from_slice(&self.g[start..]);
+            b_buf[..remaining].copy_from_slice(&self.b[start..]);
+            gr_buf[..remaining].copy_from_slice(&self.gr[start..]);
+            gg_buf[..remaining].copy_from_slice(&self.gg[start..]);
+            gb_buf[..remaining].copy_from_slice(&self.gb[start..]);
 
-                // grab current and goal colors as vectors
-                let r_vec  = Simd::from_array(r_buf);
-                let g_vec  = Simd::from_array(g_buf);
-                let b_vec  = Simd::from_array(b_buf);
-                let gr_vec = Simd::from_array(gr_buf);
-                let gg_vec = Simd::from_array(gg_buf);
-                let gb_vec = Simd::from_array(gb_buf);
+            // grab current and goal colors as vectors
+            let r_vec  = Simd::from_array(r_buf);
+            let g_vec  = Simd::from_array(g_buf);
+            let b_vec  = Simd::from_array(b_buf);
+            let gr_vec = Simd::from_array(gr_buf);
+            let gg_vec = Simd::from_array(gg_buf);
+            let gb_vec = Simd::from_array(gb_buf);
 
-                let one   = Simd::splat(1u8);
+            let one   = Simd::splat(1u8);
 
-                // compute ±1 step
-                let r_new = r_vec.simd_lt(gr_vec)
-                    .select(r_vec + one, r_vec.simd_gt(gr_vec).select(r_vec - one, r_vec));
-                let g_new = g_vec.simd_lt(gg_vec)
-                    .select(g_vec + one, g_vec.simd_gt(gg_vec).select(g_vec - one, g_vec));
-                let b_new = b_vec.simd_lt(gb_vec)
-                    .select(b_vec + one, b_vec.simd_gt(gb_vec).select(b_vec - one, b_vec));
-                let done  = r_new.simd_eq(gr_vec) & g_new.simd_eq(gg_vec) & b_new.simd_eq(gb_vec);
+            // compute ±1 step
+            let r_new = r_vec.simd_lt(gr_vec)
+                .select(r_vec + one, r_vec.simd_gt(gr_vec).select(r_vec - one, r_vec));
+            let g_new = g_vec.simd_lt(gg_vec)
+                .select(g_vec + one, g_vec.simd_gt(gg_vec).select(g_vec - one, g_vec));
+            let b_new = b_vec.simd_lt(gb_vec)
+                .select(b_vec + one, b_vec.simd_gt(gb_vec).select(b_vec - one, b_vec));
+            let done  = r_new.simd_eq(gr_vec) & g_new.simd_eq(gg_vec) & b_new.simd_eq(gb_vec);
 
-                // write this tick's values
-                let mut tmp_r = [0u8; LANES];
-                let mut tmp_g = [0u8; LANES];
-                let mut tmp_b = [0u8; LANES];
-                r_new.copy_to_slice(&mut tmp_r);
-                g_new.copy_to_slice(&mut tmp_g);
-                b_new.copy_to_slice(&mut tmp_b);
+            // write this tick's values
+            let mut tmp_r = [0u8; LANES];
+            let mut tmp_g = [0u8; LANES];
+            let mut tmp_b = [0u8; LANES];
+            r_new.copy_to_slice(&mut tmp_r);
+            g_new.copy_to_slice(&mut tmp_g);
+            b_new.copy_to_slice(&mut tmp_b);
 
-                self.r[start..start+remaining].copy_from_slice(&tmp_r[..remaining]);
-                self.g[start..start+remaining].copy_from_slice(&tmp_g[..remaining]);
-                self.b[start..start+remaining].copy_from_slice(&tmp_b[..remaining]);
+            self.r[start..start+remaining].copy_from_slice(&tmp_r[..remaining]);
+            self.g[start..start+remaining].copy_from_slice(&tmp_g[..remaining]);
+            self.b[start..start+remaining].copy_from_slice(&tmp_b[..remaining]);
 
-                // get the mask as an array we can index into and apply goal colors maskingly
-                let done_arr: [bool; LANES] = done.to_array();
-                for i in 0..remaining {
-                    if done_arr[i] {
-                        self.gr[start + i] = self.rng.random();
-                        self.gg[start + i] = self.rng.random();
-                        self.gb[start + i] = self.rng.random();
-                    }
+            // get the mask as an array we can index into and apply goal colors maskingly
+            let done_arr: [bool; LANES] = done.to_array();
+            for i in 0..remaining {
+                if done_arr[i] {
+                    self.gr[start + i] = self.rng.random();
+                    self.gg[start + i] = self.rng.random();
+                    self.gb[start + i] = self.rng.random();
                 }
             }
+        }
     }
 
     fn render(&self, out: &mut impl Write) -> io::Result<()> {
