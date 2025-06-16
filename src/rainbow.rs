@@ -184,7 +184,7 @@ impl Buffer {
             gg_buf[..remaining].copy_from_slice(&self.gg[start..]);
             gb_buf[..remaining].copy_from_slice(&self.gb[start..]);
 
-            // grab current and goal colors as vectors
+            // put them into simd registers
             let r_vec  = Simd::from_array(r_buf);
             let g_vec  = Simd::from_array(g_buf);
             let b_vec  = Simd::from_array(b_buf);
