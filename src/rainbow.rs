@@ -11,10 +11,10 @@ use termion::{
     terminal_size,
 };
 
-use std::simd::{cmp::SimdPartialOrd, prelude::{Simd, SimdPartialEq}};
+use std::simd::{cmp::SimdPartialOrd, Mask, prelude::{Simd, SimdPartialEq}};
 
 //////////////////////////////////////////////////////////////////////////////////////////
-/// Random gradient looping per-cell, now with SIMD™
+/// Random gradient looping per-cell, now with SIMD #fuckitweball edition™
 
 // number of SIMD lanes for u8's
 #[cfg(target_feature = "avx512f")]
@@ -25,6 +25,17 @@ const LANES: usize = 32;
 const LANES: usize = 16;
 #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "sse2")))]
 const LANES: usize = 1; // fallback to scalar
+
+
+/// macro for stepping each lane of `$cur` ±1 toward `$goal`, using `$one` = Simd::splat(1u8)
+macro_rules! step_toward {
+    ($cur:expr, $goal:expr, $one:expr) => {{
+        let lt = $cur.simd_lt($goal);
+        let gt = $cur.simd_gt($goal);
+        lt.select($cur + $one, gt.select($cur - $one, $cur))
+    }};
+}
+
 
 pub fn crazyfn() -> io::Result<()> {
     let mut stdout = stdout().into_raw_mode()?;
@@ -112,120 +123,131 @@ impl Buffer {
     }
 
     fn tick(&mut self) {
-        // get the chunk size
-        let len = self.r.len();
-        let chunks = len / LANES;
-
-        // looping through each chunk
-        for i in 0..chunks {
-            let base = i * LANES;
-
-            // grab the current and goal colors as vectors
-            let r_vec  = Simd::<u8, LANES>::from_slice(&self.r[base..][..LANES]);
-            let g_vec  = Simd::<u8, LANES>::from_slice(&self.g[base..][..LANES]);
-            let b_vec  = Simd::<u8, LANES>::from_slice(&self.b[base..][..LANES]);
-            let gr_vec = Simd::<u8, LANES>::from_slice(&self.gr[base..][..LANES]);
-            let gg_vec = Simd::<u8, LANES>::from_slice(&self.gg[base..][..LANES]);
-            let gb_vec = Simd::<u8, LANES>::from_slice(&self.gb[base..][..LANES]);
-
-            let one = Simd::splat(1);
-
-            // use simd < and > to determine whether we are adding or subtracting 1 for this tick
-            let r_new = r_vec.simd_lt(gr_vec)
-                .select(r_vec + one, r_vec.simd_gt(gr_vec).select(r_vec - one, r_vec));
-            let g_new = g_vec.simd_lt(gg_vec)
-                .select(g_vec + one, g_vec.simd_gt(gg_vec).select(g_vec - one, g_vec));
-            let b_new = b_vec.simd_lt(gb_vec)
-                .select(b_vec + one, b_vec.simd_gt(gb_vec).select(b_vec - one, b_vec));
-
-            // write this tick's color values to the output buffer
-            r_new.copy_to_slice(&mut self.r[base..][..LANES]);
-            g_new.copy_to_slice(&mut self.g[base..][..LANES]);
-            b_new.copy_to_slice(&mut self.b[base..][..LANES]);
-
-            // use simd == to determine whether we have reached the goal color 
+        // this is the only thing I actually learned from Quake 3's fast 1/sqrt
+        let one = Simd::splat(1u8);
+    
+        // process full LANES-sized chunks
+        let mut r_chunks  = self.r.chunks_exact_mut(LANES);
+        let mut g_chunks  = self.g.chunks_exact_mut(LANES);
+        let mut b_chunks  = self.b.chunks_exact_mut(LANES);
+        let mut gr_chunks = self.gr.chunks_exact_mut(LANES);
+        let mut gg_chunks = self.gg.chunks_exact_mut(LANES);
+        let mut gb_chunks = self.gb.chunks_exact_mut(LANES);
+    
+        while let (Some(r_slice), Some(g_slice), Some(b_slice),
+                   Some(gr_slice), Some(gg_slice), Some(gb_slice)) = (
+            r_chunks.next(), g_chunks.next(), b_chunks.next(),
+            gr_chunks.next(), gg_chunks.next(), gb_chunks.next()
+        ) {
+            // load into SIMD registers
+            let r_vec  = Simd::from_slice(r_slice);
+            let g_vec  = Simd::from_slice(g_slice);
+            let b_vec  = Simd::from_slice(b_slice);
+            let gr_vec = Simd::from_slice(gr_slice);
+            let gg_vec = Simd::from_slice(gg_slice);
+            let gb_vec = Simd::from_slice(gb_slice);
+    
+            // step ±1 toward goal
+            let r_new  = step_toward!(r_vec,  gr_vec, one);
+            let g_new  = step_toward!(g_vec,  gg_vec, one);
+            let b_new  = step_toward!(b_vec,  gb_vec, one);
+            
+    
+            // write current values
+            r_new.copy_to_slice(r_slice);
+            g_new.copy_to_slice(g_slice);
+            b_new.copy_to_slice(b_slice);
+    
+            // mask 'done' lanes
             let done = r_new.simd_eq(gr_vec) & g_new.simd_eq(gg_vec) & b_new.simd_eq(gb_vec);
-
-            // create a buffer of new random values for this chunk
-            let mut gr_buf = [0u8; LANES];
-            let mut gg_buf = [0u8; LANES];
-            let mut gb_buf = [0u8; LANES];
-            self.rng.fill(&mut gr_buf[..]);
-            self.rng.fill(&mut gg_buf[..]);
-            self.rng.fill(&mut gb_buf[..]);
-
-            // make it simd
-            let new_gr = Simd::from_array(gr_buf);
-            let new_gg = Simd::from_array(gg_buf);
-            let new_gb = Simd::from_array(gb_buf);
-
-            // apply the new random simd colors buffer to the goal colors, masked to the cells which have reached the goal color this tick
-            new_gr.store_select(&mut self.gr[base..][..LANES], done);
-            new_gg.store_select(&mut self.gg[base..][..LANES], done);
-            new_gb.store_select(&mut self.gb[base..][..LANES], done);
+    
+            // fill new random goals
+            let mut buf_gr = [0u8; LANES];
+            let mut buf_gg = [0u8; LANES];
+            let mut buf_gb = [0u8; LANES];
+            self.rng.fill(&mut buf_gr);
+            self.rng.fill(&mut buf_gg);
+            self.rng.fill(&mut buf_gb);
+    
+            let new_gr = Simd::from_array(buf_gr);
+            let new_gg = Simd::from_array(buf_gg);
+            let new_gb = Simd::from_array(buf_gb);
+    
+            // store new goals maskingly
+            new_gr.store_select(gr_slice, done);
+            new_gg.store_select(gg_slice, done);
+            new_gb.store_select(gb_slice, done);
         }
-
-        // handle the remaining unaligned chunks
-        let remaining = len % LANES;
-        if remaining != 0 {
-            let start = chunks * LANES;
-
-            // load valid lanes into full-width arrays
-            let mut r_buf  = [0u8; LANES];
-            let mut g_buf  = [0u8; LANES];
-            let mut b_buf  = [0u8; LANES];
-            let mut gr_buf = [0u8; LANES];
-            let mut gg_buf = [0u8; LANES];
-            let mut gb_buf = [0u8; LANES];
-            r_buf[..remaining].copy_from_slice(&self.r[start..]);
-            g_buf[..remaining].copy_from_slice(&self.g[start..]);
-            b_buf[..remaining].copy_from_slice(&self.b[start..]);
-            gr_buf[..remaining].copy_from_slice(&self.gr[start..]);
-            gg_buf[..remaining].copy_from_slice(&self.gg[start..]);
-            gb_buf[..remaining].copy_from_slice(&self.gb[start..]);
-
-            // put them into simd registers
-            let r_vec  = Simd::from_array(r_buf);
-            let g_vec  = Simd::from_array(g_buf);
-            let b_vec  = Simd::from_array(b_buf);
-            let gr_vec = Simd::from_array(gr_buf);
-            let gg_vec = Simd::from_array(gg_buf);
-            let gb_vec = Simd::from_array(gb_buf);
-
-            let one   = Simd::splat(1u8);
-
-            // compute ±1 step
-            let r_new = r_vec.simd_lt(gr_vec)
-                .select(r_vec + one, r_vec.simd_gt(gr_vec).select(r_vec - one, r_vec));
-            let g_new = g_vec.simd_lt(gg_vec)
-                .select(g_vec + one, g_vec.simd_gt(gg_vec).select(g_vec - one, g_vec));
-            let b_new = b_vec.simd_lt(gb_vec)
-                .select(b_vec + one, b_vec.simd_gt(gb_vec).select(b_vec - one, b_vec));
-            let done  = r_new.simd_eq(gr_vec) & g_new.simd_eq(gg_vec) & b_new.simd_eq(gb_vec);
-
-            // write this tick's values
-            let mut tmp_r = [0u8; LANES];
-            let mut tmp_g = [0u8; LANES];
-            let mut tmp_b = [0u8; LANES];
-            r_new.copy_to_slice(&mut tmp_r);
-            g_new.copy_to_slice(&mut tmp_g);
-            b_new.copy_to_slice(&mut tmp_b);
-
-            self.r[start..start+remaining].copy_from_slice(&tmp_r[..remaining]);
-            self.g[start..start+remaining].copy_from_slice(&tmp_g[..remaining]);
-            self.b[start..start+remaining].copy_from_slice(&tmp_b[..remaining]);
-
-            // get the mask as an array we can index into and apply goal colors maskingly
-            let done_arr: [bool; LANES] = done.to_array();
-            for i in 0..remaining {
-                if done_arr[i] {
-                    self.gr[start + i] = self.rng.random();
-                    self.gg[start + i] = self.rng.random();
-                    self.gb[start + i] = self.rng.random();
-                }
+    
+        // handle remaining
+        let r_tail  = r_chunks.into_remainder();
+        let g_tail  = g_chunks.into_remainder();
+        let b_tail  = b_chunks.into_remainder();
+        let gr_tail = gr_chunks.into_remainder();
+        let gg_tail = gg_chunks.into_remainder();
+        let gb_tail = gb_chunks.into_remainder();
+    
+        if !r_tail.is_empty() {
+            // get an indexable array from the mask
+            let mut mask_arr = [false; LANES];
+            for i in 0..r_tail.len() {
+                mask_arr[i] = true;
             }
+            let tail_mask: Mask<i8, LANES> = Mask::from_array(mask_arr);
+        
+            // pad current & goal for r/g/b to fill SIMD lanes
+            let mut cur_r = [0u8; LANES]; cur_r[..r_tail.len()].copy_from_slice(r_tail);
+            let mut cur_g = [0u8; LANES]; cur_g[..g_tail.len()].copy_from_slice(g_tail);
+            let mut cur_b = [0u8; LANES]; cur_b[..b_tail.len()].copy_from_slice(b_tail);
+        
+            let mut goal_r = [0u8; LANES]; goal_r[..gr_tail.len()].copy_from_slice(gr_tail);
+            let mut goal_g = [0u8; LANES]; goal_g[..gg_tail.len()].copy_from_slice(gg_tail);
+            let mut goal_b = [0u8; LANES]; goal_b[..gb_tail.len()].copy_from_slice(gb_tail);
+        
+            // load into SIMD registers
+            let r_vec  = Simd::from_array(cur_r);
+            let g_vec  = Simd::from_array(cur_g);
+            let b_vec  = Simd::from_array(cur_b);
+        
+            let gr_vec = Simd::from_array(goal_r);
+            let gg_vec = Simd::from_array(goal_g);
+            let gb_vec = Simd::from_array(goal_b);
+        
+            // step each channel
+            let r_next = step_toward!(r_vec, gr_vec, one);
+            let g_next = step_toward!(g_vec, gg_vec, one);
+            let b_next = step_toward!(b_vec, gb_vec, one);
+        
+            // write back only valid lanes maskingly
+            r_next.store_select(r_tail, tail_mask);
+            g_next.store_select(g_tail, tail_mask);
+            b_next.store_select(b_tail, tail_mask);
+        
+            // refill new goals where all three reached
+            let done_mask = (r_next.simd_eq(gr_vec)
+                           & g_next.simd_eq(gg_vec)
+                           & b_next.simd_eq(gb_vec))
+                           & tail_mask;
+        
+            // set fresh random goals
+            let mut buf_r = [0u8; LANES];
+            let mut buf_g = [0u8; LANES];
+            let mut buf_b = [0u8; LANES];
+            self.rng.fill(&mut buf_r);
+            self.rng.fill(&mut buf_g);
+            self.rng.fill(&mut buf_b);
+        
+            let new_gr = Simd::from_array(buf_r);
+            let new_gg = Simd::from_array(buf_g);
+            let new_gb = Simd::from_array(buf_b);
+            
+            // store them maskingly
+            new_gr.store_select(gr_tail, done_mask);
+            new_gg.store_select(gg_tail, done_mask);
+            new_gb.store_select(gb_tail, done_mask);
         }
     }
+    
 
     fn render(&self, out: &mut impl Write) -> io::Result<()> {
         write!(out, "{}{}", cursor::Goto(1, 1), clear::All)?;
@@ -344,7 +366,7 @@ pub fn fullscreen_rainbow() {
         write!(stdout, "\x1b[H\x1b[2J\x1b[48;2;{};{};{}m", r_scaled, g_scaled, b_scaled).unwrap();
         stdout.flush().unwrap();
 
-        phase = phase.wrapping_add(1);
+        phase = phase.saturating_add(1);
         thread::sleep(Duration::from_millis(20));
     }
 
