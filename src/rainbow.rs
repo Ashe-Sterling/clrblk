@@ -11,10 +11,10 @@ use termion::{
     terminal_size,
 };
 
-use std::simd::{cmp::SimdPartialOrd, Mask, prelude::{Simd, SimdPartialEq}};
+use std::simd::{cmp::SimdPartialOrd, prelude::{Simd, SimdPartialEq}};
 
 //////////////////////////////////////////////////////////////////////////////////////////
-/// Random gradient looping per-cell, now with SIMD #fuckitweball edition™
+/// Random gradient looping per-cell, now with SIMD™ (Optimized)
 
 // number of SIMD lanes for u8's
 #[cfg(target_feature = "avx512f")]
@@ -26,19 +26,8 @@ const LANES: usize = 16;
 #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "sse2")))]
 const LANES: usize = 1; // fallback to scalar
 
-
-/// macro for stepping each lane of `$cur` ±1 toward `$goal`, using `$one` = Simd::splat(1u8)
-macro_rules! step_toward {
-    ($cur:expr, $goal:expr, $one:expr) => {{
-        let lt = $cur.simd_lt($goal);
-        let gt = $cur.simd_gt($goal);
-        lt.select($cur + $one, gt.select($cur - $one, $cur))
-    }};
-}
-
-
 pub fn crazyfn() -> io::Result<()> {
-    let mut stdout = stdout().into_raw_mode()?;
+    let mut stdout = BufWriter::new(stdout().into_raw_mode()?);
     write!(stdout, "\x1b[?25l")?;
     stdout.flush()?;
 
@@ -55,7 +44,7 @@ pub fn crazyfn() -> io::Result<()> {
         buffer.resize();
         buffer.tick();
         buffer.render(&mut stdout)?;
-        stdout.flush()?;  // ensure every frame is fully drawn
+        stdout.flush()?;
         thread::sleep(Duration::from_millis(20));
     }
 
@@ -67,13 +56,38 @@ pub fn crazyfn() -> io::Result<()> {
 struct Buffer {
     width: u16,
     height: u16,
+    pixels: PixelBuffer,
+    goals: PixelBuffer,
+    rng: ThreadRng,
+}
+
+#[repr(align(64))] // align to cache line boundary
+struct PixelBuffer {
     r: Vec<u8>,
     g: Vec<u8>,
     b: Vec<u8>,
-    gr: Vec<u8>,
-    gg: Vec<u8>,
-    gb: Vec<u8>,
-    rng: ThreadRng,
+}
+
+impl PixelBuffer {
+    fn new(size: usize) -> Self {
+        Self {
+            r: vec![0; size],
+            g: vec![0; size],
+            b: vec![0; size],
+        }
+    }
+
+    fn resize(&mut self, new_size: usize) {
+        self.r.resize(new_size, 0);
+        self.g.resize(new_size, 0);
+        self.b.resize(new_size, 0);
+    }
+
+    fn fill_random(&mut self, rng: &mut ThreadRng) {
+        rng.fill(&mut self.r[..]);
+        rng.fill(&mut self.g[..]);
+        rng.fill(&mut self.b[..]);
+    }
 }
 
 impl Buffer {
@@ -82,21 +96,13 @@ impl Buffer {
         let size = (w as usize) * (h as usize);
         let mut rng = rand::rng();
 
-        let mut r = vec![0; size];
-        let mut g = vec![0; size];
-        let mut b = vec![0; size];
-        let mut gr = vec![0; size];
-        let mut gg = vec![0; size];
-        let mut gb = vec![0; size];
+        let mut pixels = PixelBuffer::new(size);
+        let mut goals = PixelBuffer::new(size);
 
-        rng.fill(&mut r[..]);
-        rng.fill(&mut g[..]);
-        rng.fill(&mut b[..]);
-        rng.fill(&mut gr[..]);
-        rng.fill(&mut gg[..]);
-        rng.fill(&mut gb[..]);
+        pixels.fill_random(&mut rng);
+        goals.fill_random(&mut rng);
 
-        Buffer { width: w, height: h, r, g, b, gr, gg, gb, rng }
+        Buffer { width: w, height: h, pixels, goals, rng }
     }
 
     fn resize(&mut self) {
@@ -106,161 +112,153 @@ impl Buffer {
             self.height = h;
             let size = (w as usize) * (h as usize);
 
-            self.r.resize(size, 0);
-            self.g.resize(size, 0);
-            self.b.resize(size, 0);
-            self.gr.resize(size, 0);
-            self.gg.resize(size, 0);
-            self.gb.resize(size, 0);
+            self.pixels.resize(size);
+            self.goals.resize(size);
 
-            self.rng.fill(&mut self.r[..]);
-            self.rng.fill(&mut self.g[..]);
-            self.rng.fill(&mut self.b[..]);
-            self.rng.fill(&mut self.gr[..]);
-            self.rng.fill(&mut self.gg[..]);
-            self.rng.fill(&mut self.gb[..]);
+            self.pixels.fill_random(&mut self.rng);
+            self.goals.fill_random(&mut self.rng);
         }
     }
 
     fn tick(&mut self) {
-        // this is the only thing I actually learned from Quake 3's fast 1/sqrt
-        let one = Simd::splat(1u8);
-    
-        // process full LANES-sized chunks
-        let mut r_chunks  = self.r.chunks_exact_mut(LANES);
-        let mut g_chunks  = self.g.chunks_exact_mut(LANES);
-        let mut b_chunks  = self.b.chunks_exact_mut(LANES);
-        let mut gr_chunks = self.gr.chunks_exact_mut(LANES);
-        let mut gg_chunks = self.gg.chunks_exact_mut(LANES);
-        let mut gb_chunks = self.gb.chunks_exact_mut(LANES);
-    
-        while let (Some(r_slice), Some(g_slice), Some(b_slice),
-                   Some(gr_slice), Some(gg_slice), Some(gb_slice)) = (
-            r_chunks.next(), g_chunks.next(), b_chunks.next(),
-            gr_chunks.next(), gg_chunks.next(), gb_chunks.next()
-        ) {
-            // load into SIMD registers
-            let r_vec  = Simd::from_slice(r_slice);
-            let g_vec  = Simd::from_slice(g_slice);
-            let b_vec  = Simd::from_slice(b_slice);
-            let gr_vec = Simd::from_slice(gr_slice);
-            let gg_vec = Simd::from_slice(gg_slice);
-            let gb_vec = Simd::from_slice(gb_slice);
-    
-            // step ±1 toward goal
-            let r_new  = step_toward!(r_vec,  gr_vec, one);
-            let g_new  = step_toward!(g_vec,  gg_vec, one);
-            let b_new  = step_toward!(b_vec,  gb_vec, one);
+        let len = self.pixels.r.len();
+        let chunks = len / LANES;
+
+        // pre-generate ALL random data in one massive batch (maximum RNG efficiency)
+        let total_random_needed = chunks * LANES * 3;
+        let mut rng_buffer = vec![0u8; total_random_needed];
+        self.rng.fill(&mut rng_buffer[..]);
+
+        // process chunks with manual loop unrolling for maximum SIMD throughput
+        let mut chunk_idx = 0;
+        let unroll_factor = 4;
+        let unrolled_chunks = chunks / unroll_factor;
+        
+        // process 4 chunks at a time to maximize instruction pipeline utilization
+        for _ in 0..unrolled_chunks {
+            let base1 = chunk_idx * LANES;
+            let base2 = (chunk_idx + 1) * LANES;
+            let base3 = (chunk_idx + 2) * LANES;
+            let base4 = (chunk_idx + 3) * LANES;
             
-    
-            // write current values
-            r_new.copy_to_slice(r_slice);
-            g_new.copy_to_slice(g_slice);
-            b_new.copy_to_slice(b_slice);
-    
-            // mask 'done' lanes
-            let done = r_new.simd_eq(gr_vec) & g_new.simd_eq(gg_vec) & b_new.simd_eq(gb_vec);
-    
-            // fill new random goals
-            let mut buf_gr = [0u8; LANES];
-            let mut buf_gg = [0u8; LANES];
-            let mut buf_gb = [0u8; LANES];
-            self.rng.fill(&mut buf_gr);
-            self.rng.fill(&mut buf_gg);
-            self.rng.fill(&mut buf_gb);
-    
-            let new_gr = Simd::from_array(buf_gr);
-            let new_gg = Simd::from_array(buf_gg);
-            let new_gb = Simd::from_array(buf_gb);
-    
-            // store new goals maskingly
-            new_gr.store_select(gr_slice, done);
-            new_gg.store_select(gg_slice, done);
-            new_gb.store_select(gb_slice, done);
+            self.process_chunk(base1, &rng_buffer, chunk_idx);
+            self.process_chunk(base2, &rng_buffer, chunk_idx + 1);
+            self.process_chunk(base3, &rng_buffer, chunk_idx + 2);
+            self.process_chunk(base4, &rng_buffer, chunk_idx + 3);
+            
+            chunk_idx += unroll_factor;
         }
-    
-        // handle remaining
-        let r_tail  = r_chunks.into_remainder();
-        let g_tail  = g_chunks.into_remainder();
-        let b_tail  = b_chunks.into_remainder();
-        let gr_tail = gr_chunks.into_remainder();
-        let gg_tail = gg_chunks.into_remainder();
-        let gb_tail = gb_chunks.into_remainder();
-    
-        if !r_tail.is_empty() {
-            // get an indexable array from the mask
-            let mut mask_arr = [false; LANES];
-            for i in 0..r_tail.len() {
-                mask_arr[i] = true;
-            }
-            let tail_mask: Mask<i8, LANES> = Mask::from_array(mask_arr);
-        
-            // pad current & goal for r/g/b to fill SIMD lanes
-            let mut cur_r = [0u8; LANES]; cur_r[..r_tail.len()].copy_from_slice(r_tail);
-            let mut cur_g = [0u8; LANES]; cur_g[..g_tail.len()].copy_from_slice(g_tail);
-            let mut cur_b = [0u8; LANES]; cur_b[..b_tail.len()].copy_from_slice(b_tail);
-        
-            let mut goal_r = [0u8; LANES]; goal_r[..gr_tail.len()].copy_from_slice(gr_tail);
-            let mut goal_g = [0u8; LANES]; goal_g[..gg_tail.len()].copy_from_slice(gg_tail);
-            let mut goal_b = [0u8; LANES]; goal_b[..gb_tail.len()].copy_from_slice(gb_tail);
-        
-            // load into SIMD registers
-            let r_vec  = Simd::from_array(cur_r);
-            let g_vec  = Simd::from_array(cur_g);
-            let b_vec  = Simd::from_array(cur_b);
-        
-            let gr_vec = Simd::from_array(goal_r);
-            let gg_vec = Simd::from_array(goal_g);
-            let gb_vec = Simd::from_array(goal_b);
-        
-            // step each channel
-            let r_next = step_toward!(r_vec, gr_vec, one);
-            let g_next = step_toward!(g_vec, gg_vec, one);
-            let b_next = step_toward!(b_vec, gb_vec, one);
-        
-            // write back only valid lanes maskingly
-            r_next.store_select(r_tail, tail_mask);
-            g_next.store_select(g_tail, tail_mask);
-            b_next.store_select(b_tail, tail_mask);
-        
-            // refill new goals where all three reached
-            let done_mask = (r_next.simd_eq(gr_vec)
-                           & g_next.simd_eq(gg_vec)
-                           & b_next.simd_eq(gb_vec))
-                           & tail_mask;
-        
-            // set fresh random goals
-            let mut buf_r = [0u8; LANES];
-            let mut buf_g = [0u8; LANES];
-            let mut buf_b = [0u8; LANES];
-            self.rng.fill(&mut buf_r);
-            self.rng.fill(&mut buf_g);
-            self.rng.fill(&mut buf_b);
-        
-            let new_gr = Simd::from_array(buf_r);
-            let new_gg = Simd::from_array(buf_g);
-            let new_gb = Simd::from_array(buf_b);
-            
-            // store them maskingly
-            new_gr.store_select(gr_tail, done_mask);
-            new_gg.store_select(gg_tail, done_mask);
-            new_gb.store_select(gb_tail, done_mask);
+
+        for i in chunk_idx..chunks {
+            let base = i * LANES;
+            self.process_chunk(base, &rng_buffer, i);
+        }
+
+        // process remainder
+        let remaining = len % LANES;
+        if remaining != 0 {
+            self.process_remaining_elements(chunks * LANES, remaining);
         }
     }
-    
+
+    #[inline(always)]
+    fn process_chunk(&mut self, base: usize, rng_buffer: &[u8], chunk_idx: usize) {
+        // load up the SIMD registers
+        let r_vec = Simd::<u8, LANES>::from_slice(&self.pixels.r[base..base + LANES]);
+        let g_vec = Simd::<u8, LANES>::from_slice(&self.pixels.g[base..base + LANES]);
+        let b_vec = Simd::<u8, LANES>::from_slice(&self.pixels.b[base..base + LANES]);
+        let gr_vec = Simd::<u8, LANES>::from_slice(&self.goals.r[base..base + LANES]);
+        let gg_vec = Simd::<u8, LANES>::from_slice(&self.goals.g[base..base + LANES]);
+        let gb_vec = Simd::<u8, LANES>::from_slice(&self.goals.b[base..base + LANES]);
+
+        let one = Simd::splat(1u8);
+
+        // check less than or greater than
+        let r_lt = r_vec.simd_lt(gr_vec);
+        let r_gt = r_vec.simd_gt(gr_vec);
+        let g_lt = g_vec.simd_lt(gg_vec);
+        let g_gt = g_vec.simd_gt(gg_vec);
+        let b_lt = b_vec.simd_lt(gb_vec);
+        let b_gt = b_vec.simd_gt(gb_vec);
+
+        // step towards goal
+        let r_new = r_lt.select(r_vec + one, r_gt.select(r_vec - one, r_vec));
+        let g_new = g_lt.select(g_vec + one, g_gt.select(g_vec - one, g_vec));
+        let b_new = b_lt.select(b_vec + one, b_gt.select(b_vec - one, b_vec));
+
+        // write the new colors
+        r_new.copy_to_slice(&mut self.pixels.r[base..base + LANES]);
+        g_new.copy_to_slice(&mut self.pixels.g[base..base + LANES]);
+        b_new.copy_to_slice(&mut self.pixels.b[base..base + LANES]);
+
+        // check for reached goal
+        let done = r_new.simd_eq(gr_vec) & g_new.simd_eq(gg_vec) & b_new.simd_eq(gb_vec);
+
+        // load pre-generated random goals
+        let rng_base = chunk_idx * LANES * 3;
+        let new_gr = Simd::from_slice(&rng_buffer[rng_base..rng_base + LANES]);
+        let new_gg = Simd::from_slice(&rng_buffer[rng_base + LANES..rng_base + 2 * LANES]);
+        let new_gb = Simd::from_slice(&rng_buffer[rng_base + 2 * LANES..rng_base + 3 * LANES]);
+
+        // store new goals (masked to completed cells)
+        new_gr.store_select(&mut self.goals.r[base..base + LANES], done);
+        new_gg.store_select(&mut self.goals.g[base..base + LANES], done);
+        new_gb.store_select(&mut self.goals.b[base..base + LANES], done);
+    }
+
+    fn process_remaining_elements(&mut self, start: usize, remaining: usize) {
+        // scalar fallback
+        for i in start..start + remaining {
+            // step towards goal
+            self.pixels.r[i] = self.step_towards_goal(self.pixels.r[i], self.goals.r[i]);
+            self.pixels.g[i] = self.step_towards_goal(self.pixels.g[i], self.goals.g[i]);
+            self.pixels.b[i] = self.step_towards_goal(self.pixels.b[i], self.goals.b[i]);
+
+            // check if goal is reached and assign new goal if so
+            if self.pixels.r[i] == self.goals.r[i] && 
+               self.pixels.g[i] == self.goals.g[i] && 
+               self.pixels.b[i] == self.goals.b[i] {
+                self.goals.r[i] = self.rng.random();
+                self.goals.g[i] = self.rng.random();
+                self.goals.b[i] = self.rng.random();
+            }
+        }
+    }
+
+    #[inline(always)]
+    fn step_towards_goal(&self, current: u8, goal: u8) -> u8 {
+        match current.cmp(&goal) {
+            std::cmp::Ordering::Less => current + 1,
+            std::cmp::Ordering::Greater => current - 1,
+            std::cmp::Ordering::Equal => current,
+        }
+    }
 
     fn render(&self, out: &mut impl Write) -> io::Result<()> {
         write!(out, "{}{}", cursor::Goto(1, 1), clear::All)?;
+        
+        // pre-allocate string buffer for the entire frame
+        let mut frame_buffer = String::with_capacity(
+            (self.width as usize) * (self.height as usize) * 20 // rough estimate for escape sequences
+        );
+
         for row in 0..self.height {
             for col in 0..self.width {
                 let idx = (row as usize) * (self.width as usize) + (col as usize);
-                write!(out, "\x1b[48;2;{};{};{}m ", self.r[idx], self.g[idx], self.b[idx])?;
+                frame_buffer.push_str(&format!(
+                    "\x1b[48;2;{};{};{}m ", 
+                    self.pixels.r[idx], 
+                    self.pixels.g[idx], 
+                    self.pixels.b[idx]
+                ));
             }
             if row < self.height - 1 {
-                write!(out, "\r\n")?;
+                frame_buffer.push_str("\r\n");
             }
         }
-        write!(out, "\x1b[0m")?;
+        frame_buffer.push_str("\x1b[0m");
+
+        write!(out, "{}", frame_buffer)?;
         Ok(())
     }
 }
