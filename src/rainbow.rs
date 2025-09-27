@@ -35,8 +35,8 @@ pub fn crazyfn() -> io::Result<()> {
     let mut buffer = Buffer::new();
 
     loop {
-        if let Some(Ok(b)) = stdin.next() {
-            if b == 3 {
+        if let Some(Ok(input)) = stdin.next() {
+            if input == 3 { // 3 = ctrl-c
                 break;
             }
         }
@@ -61,7 +61,7 @@ struct Buffer {
     rng: ThreadRng,
 }
 
-#[repr(align(64))] // align to cache line boundary
+#[repr(align(64))]  // align to cache line boundary
 struct PixelBuffer {
     r: Vec<u8>,
     g: Vec<u8>,
