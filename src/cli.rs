@@ -7,6 +7,22 @@ use crate::{
 };
 
 
+pub struct Args {
+    pub width: u8,
+    pub inline: bool,
+    pub numbered: bool,
+    pub fit: bool,
+    pub values: Vec<String>,
+    pub rainbow: bool,
+    pub grayscale: bool,
+    pub loop_gradient: bool,
+    pub crazy: bool,
+    pub help: bool,
+    pub version: bool,
+    pub error: bool
+}
+
+
 pub fn parse_args() -> Args {
     let args: Vec<String> = env::args().collect();
     let mut parsed_args = Args {
@@ -85,42 +101,6 @@ pub fn parse_args() -> Args {
     return parsed_args;
 }
 
-pub struct Args {
-    /// Width of blocks
-    pub width: u8,
-
-    /// Multiple colors shown in one line (only for ANSI ranges)
-    pub inline: bool,
-
-    /// Print color number(s) before each block (only for ANSI)
-    pub numbered: bool,
-
-    /// Fit hex gradient to full terminal width
-    pub fit: bool,
-
-    /// Color(s) to display: ANSI codes, names, or hex strings (#RRGGBB)
-    pub values: Vec<String>,
-
-    /// Print a full 6-phase RGB rainbow
-    pub rainbow: bool,
-
-    /// Print a grayscale gradient
-    pub grayscale: bool,
-
-    /// Show a fullscreen rainbow gradient loop (+/- to adjust brightness)
-    pub loop_gradient: bool,
-
-    /// Show a fullscreen grid of cells of random colors that each fade to new random colors
-    pub crazy: bool,
-
-    /// Print help information
-    pub help: bool,
-
-    /// Print version information
-    pub version: bool,
-
-    pub error: bool
-}
 
 pub fn single(values: &[String], width: u8, numbered: bool) {
     let input = &values[0];
