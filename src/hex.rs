@@ -1,4 +1,4 @@
-use terminal_size::{terminal_size, Width};
+use termion::terminal_size;
 use std::io::{self, BufWriter, Write};
 
 pub fn print_hex_gradient(hex1: Vec<&str>, hex2: Vec<&str>, fit_width: bool) {
@@ -18,7 +18,7 @@ pub fn print_hex_gradient(hex1: Vec<&str>, hex2: Vec<&str>, fit_width: bool) {
 
     let steps = if fit_width {
         match terminal_size() {
-            Some((Width(w), _)) if w >= 1 => (w - 1) as usize,
+            Ok((w, _)) if w >= 1 => (w - 1) as usize,
             _ => default_steps,
         }
     } else {
