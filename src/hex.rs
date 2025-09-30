@@ -1,4 +1,4 @@
-use termion::terminal_size;
+use crate::terminal::terminal_size;
 use std::io::{self, BufWriter, Write};
 
 pub fn print_hex_gradient(hex1: Vec<&str>, hex2: Vec<&str>, fit_width: bool) {

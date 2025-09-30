@@ -15,7 +15,6 @@ pub struct Args {
     pub values: Vec<String>,
     pub rainbow: bool,
     pub grayscale: bool,
-    pub loop_gradient: bool,
     pub crazy: bool,
     pub help: bool,
     pub version: bool,
@@ -33,7 +32,6 @@ pub fn parse_args() -> Args {
         values: Vec::new(),
         rainbow: false,
         grayscale: false,
-        loop_gradient: false,
         crazy: false,
         help: false,
         version: false,
@@ -73,9 +71,6 @@ pub fn parse_args() -> Args {
             },
             "-g" | "--grayscale" => {
                 parsed_args.grayscale = true;
-            },
-            "-l" | "--loop-gradient" => {
-                parsed_args.loop_gradient = true;
             },
             "--crazy" => {
                 parsed_args.crazy = true;
@@ -156,7 +151,6 @@ pub fn print_help() {
     println!("  -f, --fit           Fit hex gradient to full terminal width");
     println!("  -r, --rainbow        Print a full   6-phase RGB rainbow");
     println!("  -g, --grayscale      Print a grayscale gradient");
-    println!("  -l, --loop-gradient  Show a fullscreen rainbow gradient loop (+/- to adjust brightness)");
     println!("      --crazy          Show a fullscreen grid of cells of random colors that each fade to new random colors");
     println!("  -h, --help           Print help information");
     println!("  -V, --version        Print version information");

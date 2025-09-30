@@ -5,9 +5,11 @@ mod cli;
 mod hex;
 mod rainbow;
 mod validate;
+mod terminal;
+mod rng;
 
 use cli::{Args, many, single, parse_args, print_help};
-use rainbow::{fullscreen_rainbow, print_grayscale, print_rainbow, crazyfn};
+use rainbow::{print_grayscale, print_rainbow, crazyfn};
 
 
 
@@ -29,8 +31,6 @@ fn main() {
         print_rainbow();
     } else if args.grayscale {
         print_grayscale();
-    } else if args.loop_gradient {
-        fullscreen_rainbow();
     } else if args.crazy {
         let _ = crazyfn();
     } else if args.values.len() == 2 {

@@ -2,6 +2,6 @@
 name = "clrblk"
 version = "1.4.0"
 edition = "2024"
+
 [dependencies]
-rand = ">=0.9.1"
-termion = ">=4.0.5"
+libc = "0.2"

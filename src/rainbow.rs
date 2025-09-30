@@ -1,16 +1,9 @@
 use std::{
-    io::{self, stdout, BufWriter, Read, Write}, sync::{atomic::{AtomicBool, Ordering}, Arc}, thread, time::Duration
+    io::{self, stdout, BufWriter, Write}, thread, time::Duration, sync::atomic::{AtomicBool, Ordering}
 };
 
-use rand::{rngs::ThreadRng, Rng};
-use termion::{
-    async_stdin,
-    clear,
-    cursor,
-    raw::IntoRawMode,
-    terminal_size,
-};
-
+use crate::terminal::{terminal_size, enable_raw_mode, disable_raw_mode, InputHandler, clear_screen};
+use crate::rng::SimpleRng;
 use std::simd::{cmp::SimdPartialOrd, prelude::{Simd, SimdPartialEq}};
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -26,31 +19,48 @@ const LANES: usize = 16;
 #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "sse2")))]
 const LANES: usize = 1; // fallback to scalar
 
+static CLEANUP_DONE: AtomicBool = AtomicBool::new(false);
+
+extern "C" fn signal_handler(_: libc::c_int) {
+    if !CLEANUP_DONE.load(Ordering::Relaxed) {
+        let _ = disable_raw_mode();
+        CLEANUP_DONE.store(true, Ordering::Relaxed);
+    }
+    std::process::exit(0);
+}
+
 pub fn crazyfn() -> io::Result<()> {
-    let mut stdout = BufWriter::new(stdout().into_raw_mode()?);
-    write!(stdout, "\x1b[?25l")?;
-    stdout.flush()?;
-
-    let mut stdin = async_stdin().bytes();
-    let mut buffer = Buffer::new();
-
-    loop {
-        if let Some(Ok(input)) = stdin.next() {
-            if input == 3 { // 3 = ctrl-c
-                break;
-            }
-        }
-
-        buffer.resize();
-        buffer.tick();
-        buffer.render(&mut stdout)?;
-        stdout.flush()?;
-        thread::sleep(Duration::from_millis(20));
+    unsafe {
+        libc::signal(libc::SIGINT, signal_handler as usize);
+        libc::signal(libc::SIGTERM, signal_handler as usize);
     }
 
-    write!(stdout, "\x1b[0m\x1b[?25h")?;
-    stdout.flush()?;
-    Ok(())
+    enable_raw_mode()?;
+    clear_screen()?;
+    
+    let mut stdout = BufWriter::new(stdout());
+    let mut buffer = Buffer::new();
+    let input = InputHandler::new();
+
+    let result = (|| -> io::Result<()> {
+        loop {
+            if input.check_exit() {
+                break;
+            }
+            
+            buffer.resize();
+            buffer.tick();
+            buffer.render(&mut stdout)?;
+            stdout.flush()?;
+            thread::sleep(Duration::from_millis(20));
+        }
+        Ok(())
+    })();
+
+    disable_raw_mode()?;
+    CLEANUP_DONE.store(true, Ordering::Relaxed);
+    
+    result
 }
 
 struct Buffer {
@@ -58,7 +68,7 @@ struct Buffer {
     height: u16,
     pixels: PixelBuffer,
     goals: PixelBuffer,
-    rng: ThreadRng,
+    rng: SimpleRng,
 }
 
 #[repr(align(64))]  // align to cache line boundary
@@ -83,7 +93,7 @@ impl PixelBuffer {
         self.b.resize(new_size, 0);
     }
 
-    fn fill_random(&mut self, rng: &mut ThreadRng) {
+    fn fill_random(&mut self, rng: &mut SimpleRng) {
         rng.fill(&mut self.r[..]);
         rng.fill(&mut self.g[..]);
         rng.fill(&mut self.b[..]);
@@ -92,9 +102,9 @@ impl PixelBuffer {
 
 impl Buffer {
     fn new() -> Self {
-        let (w, h) = terminal_size().unwrap();
+        let (w, h) = terminal_size().unwrap_or((80, 24));
         let size = (w as usize) * (h as usize);
-        let mut rng = rand::rng();
+        let mut rng = SimpleRng::new();
 
         let mut pixels = PixelBuffer::new(size);
         let mut goals = PixelBuffer::new(size);
@@ -106,7 +116,7 @@ impl Buffer {
     }
 
     fn resize(&mut self) {
-        let (w, h) = terminal_size().unwrap();
+        let (w, h) = terminal_size().unwrap_or((self.width, self.height));
         if w != self.width || h != self.height {
             self.width = w;
             self.height = h;
@@ -124,7 +134,7 @@ impl Buffer {
         let len = self.pixels.r.len();
         let chunks = len / LANES;
 
-        // pre-generate ALL random data in one massive batch (maximum RNG efficiency)
+        // pre-generate random goals for all chunks
         let total_random_needed = chunks * LANES * 3;
         let mut rng_buffer = vec![0u8; total_random_needed];
         self.rng.fill(&mut rng_buffer[..]);
@@ -134,7 +144,6 @@ impl Buffer {
         let unroll_factor = 4;
         let unrolled_chunks = chunks / unroll_factor;
         
-        // process 4 chunks at a time to maximize instruction pipeline utilization
         for _ in 0..unrolled_chunks {
             let base1 = chunk_idx * LANES;
             let base2 = (chunk_idx + 1) * LANES;
@@ -235,11 +244,10 @@ impl Buffer {
     }
 
     fn render(&self, out: &mut impl Write) -> io::Result<()> {
-        write!(out, "{}{}", cursor::Goto(1, 1), clear::All)?;
+        write!(out, "\x1b[H\x1b[2J")?; // Direct ANSI: cursor home + clear screen
         
-        // pre-allocate string buffer for the entire frame
         let mut frame_buffer = String::with_capacity(
-            (self.width as usize) * (self.height as usize) * 20 // rough estimate for escape sequences
+            (self.width as usize) * (self.height as usize) * 20
         );
 
         for row in 0..self.height {
@@ -320,54 +328,4 @@ pub fn print_rainbow() {
 
     let _ = writeln!(out, "\x1b[0m");
     let _ = out.flush();
-}
-
-
-pub fn fullscreen_rainbow() {
-    let running = Arc::new(AtomicBool::new(true));
-    let mut stdout = io::stdout().into_raw_mode().unwrap();
-
-    write!(stdout, "\x1b[?25l").unwrap();
-    stdout.flush().unwrap();
-
-    let mut phase: u8 = 0;
-    let mut value: u8 = 255;
-    let mut stdin = async_stdin().bytes();
-
-    while running.load(Ordering::SeqCst) {
-        if let Some(Ok(input)) = stdin.next() {
-            match input {
-                b'+' | b'=' if value < 255 => {
-                    value = value.saturating_add(5);
-                }
-                b'-' if value > 0 => {
-                    value = value.saturating_sub(5);
-                }
-                3 => { // Ctrl-C byte
-                    running.store(false, Ordering::SeqCst);
-                }
-                _ => {}
-            }
-        }
-
-        let hue = phase;
-        let (r_val, g_val, b_val) = match hue {
-            0..=85   => (255 - hue * 3, hue * 3, 0),
-            86..=170 => (0, 255 - (hue - 85) * 3, (hue - 85) * 3),
-            _        => ((hue - 170) * 3, 0, 255 - (hue - 170) * 3),
-        };
-
-        let r_scaled = (r_val as u16 * value as u16 / 255) as u8;
-        let g_scaled = (g_val as u16 * value as u16 / 255) as u8;
-        let b_scaled = (b_val as u16 * value as u16 / 255) as u8;
-
-        write!(stdout, "\x1b[H\x1b[2J\x1b[48;2;{};{};{}m", r_scaled, g_scaled, b_scaled).unwrap();
-        stdout.flush().unwrap();
-
-        phase = phase.saturating_add(1);
-        thread::sleep(Duration::from_millis(20));
-    }
-
-    write!(stdout, "\x1b[0m\x1b[?25h").unwrap();
-    stdout.flush().unwrap();
 }
