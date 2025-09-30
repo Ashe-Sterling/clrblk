@@ -1,6 +1,6 @@
 # clrblk
 
-clrblk is a command-line utility for printing color blocks in the terminal. It supports various color input formats, including ANSI codes, hexadecimal values, and named ANSI colors. Users can also specify a range of ANSI colors, a range for hexadecimal gradients, adjust block width, and enable inline range printing.
+clrblk is a command-line utility for printing color blocks in the terminal. It supports various color input formats, including ANSI codes, hexadecimal values, and named ANSI colors. Its only dependency is libc. Users can also specify a range of ANSI colors, a range for hexadecimal gradients, adjust block width, and enable inline range printing.
 
 ## Features
 
@@ -13,6 +13,7 @@ clrblk is a command-line utility for printing color blocks in the terminal. It s
 - Customize block width
 - Inline range printing
 - ANSI color number labeling
+...and more!
 
 ## Installation
 
@@ -87,11 +88,6 @@ clrblk f5a9b8 000000
 #### Fit hex gradient to terminal width
 ```sh
 clrblk f5a9b8 000000 -f
-```
-
-### Show a fullscreen gradient loop (+/- to adjust brightness)
-```sh
-clrblk -l
 ```
 
 ### Show a full screen of random color blocks that all fade to new random colors independently
